@@ -14,8 +14,8 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 |---|---|---|
 | 0 | Planejamento e arquitetura | ✅ |
 | 1 | Estrutura, PostgreSQL local, `/health`, testes | ✅ |
-| 2 | Banco de dados (migrations e seeds) | próxima |
-| 3 | Backend base | pendente |
+| 2 | Banco de dados (migrations e seeds) | ✅ |
+| 3 | Backend base | próxima |
 | 4 | Usuários | pendente |
 | 5 | Autenticação JWT | pendente |
 | 6 | Agricultores | pendente |
@@ -100,7 +100,32 @@ npm run dev
 
 Acesse `http://localhost:5173`.
 
-### 5. Banco de testes
+### 5. Criar o schema e os dados iniciais
+
+Com o banco no ar:
+
+```bash
+cd backend
+npm run migrate    # cria as 11 tabelas, indices, triggers e a view
+npm run seed       # cria as 7 categorias e o usuario administrador
+```
+
+O `npm run seed` imprime **uma vez** a senha do administrador:
+
+```
+============================================================
+  ADMINISTRADOR CRIADO
+============================================================
+  E-mail: admin@agrohero.local
+  Senha : d!mNBeke@SbxLFP&6g@S
+============================================================
+```
+
+Anote a senha. Ela é gerada aleatoriamente a cada ambiente e não é exibida de novo — assim nenhum ambiente nasce com uma senha conhecida e versionada no Git.
+
+Ambos os comandos são seguros para rodar mais de uma vez: as migrations sabem o que já foi aplicado e os seeds não duplicam dados.
+
+### 6. Banco de testes
 
 Os testes de integração usam um banco separado e descartável:
 
@@ -108,6 +133,8 @@ Os testes de integração usam um banco separado e descartável:
 docker exec agrohero_db psql -U agrohero -d postgres -c "CREATE DATABASE agrohero_test;"
 cd backend && npm test
 ```
+
+Os testes **recriam o schema do zero** a cada execução, então não dependem de você ter rodado as migrations antes.
 
 ---
 
@@ -255,6 +282,8 @@ Filtros de `/produtos`: `busca`, `categoria_id`, `agricultor_id`, `cidade`, `est
 | `docker compose up -d` | raiz | Sobe o PostgreSQL |
 | `docker compose down` | raiz | Para o PostgreSQL (mantém os dados) |
 | `docker compose down -v` | raiz | Para e **apaga** os dados |
+| `npm run migrate` | backend | Aplica as migrations pendentes |
+| `npm run seed` | backend | Cria categorias e o administrador |
 | `npm run dev` | backend | API com reload automático |
 | `npm test` | backend | Testes de integração |
 | `npm run dev` | frontend | Interface em desenvolvimento |

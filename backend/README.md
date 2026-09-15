@@ -81,13 +81,55 @@ Resposta esperada:
 
 Se o banco estiver parado, o `/health` responde **503** com `banco: "indisponivel"` — a API continua no ar e volta a funcionar sozinha quando o banco voltar.
 
-## Testes
+## Banco de dados
+
+### Migrations
+
+```bash
+npm run migrate
+```
+
+Cada arquivo roda dentro de sua própria transação, então uma falha no meio reverte o arquivo por inteiro e nunca deixa o schema pela metade. O histórico fica na tabela `migrations`.
+
+| Arquivo | O que cria |
+|---|---|
+| `001_funcoes_base.sql` | função `atualizar_timestamp()` |
+| `002_identidade.sql` | `usuarios`, `agricultores`, `enderecos` |
+| `003_catalogo.sql` | `categorias`, `produtos` |
+| `004_pedidos.sql` | `carrinhos`, `carrinho_itens`, `pedidos`, `pedido_itens` e o trigger de sincronização de status |
+| `005_pagamentos_avaliacoes.sql` | `pagamentos`, `avaliacoes` e a view `produtos_com_avaliacao` |
+
+### Seeds
+
+```bash
+npm run seed
+```
+
+Idempotentes: podem rodar em todo deploy. Criam as 7 categorias e o administrador (com senha aleatória exibida uma única vez).
+
+### Decisões de modelagem
+
+**O status pertence ao item, não só ao pedido.** Um pedido pode ter produtos de vários produtores, então cada `pedido_itens` tem seu próprio `status`. O `pedidos.status` é derivado do conjunto por um trigger, e um agricultor só consegue alterar os itens dele porque toda query filtra por `agricultor_id` — que é denormalizado de propósito em `pedido_itens`.
+
+**Preços são congelados em `pedido_itens.preco_unitario`.** Se o produtor reajustar o preço amanhã, o pedido de hoje mantém o valor combinado.
+
+**`carrinho_itens` não guarda preço.** O preço oficial é sempre lido de `produtos` no checkout. Se estivesse no carrinho, seria um campo manipulável pelo cliente.
+
+**O endereço do pedido é um snapshot em JSONB.** O cliente pode editar ou apagar um endereço depois; o pedido precisa continuar mostrando para onde foi enviado.
+
+**Índices parciais onde fazem diferença.** `produtos_disponiveis_idx` cobre só `ativo = TRUE`, que é o que as listagens públicas consultam. `enderecos_um_principal_por_consumidor` é um índice único parcial que garante no banco que cada consumidor tem no máximo um endereço principal — sem condição de corrida.
+
+**Busca textual em português.** Índices GIN com `to_tsvector('portuguese', ...)` em `produtos` e `agricultores`, para busca por termo e radical.
+
+### Testar o banco
 
 ```bash
 npm test
 ```
 
-Os testes de integração sobem o Express e usam o PostgreSQL real (banco `agrohero_test`), com `NODE_ENV=test`. Não há mock de banco: o objetivo é validar o comportamento de verdade.
+46 testes, incluindo os negativos: preço negativo, estoque negativo, total incoerente, subtotal manipulado, nota fora de 1–5, IDOR entre produtores e CEP inválido.
+
+Os testes recriam o schema do zero a cada execução no banco `agrohero_test`, então não dependem de migrations aplicadas previamente. Não há mock de banco: o objetivo é validar o comportamento real.
 
 ## Estrutura
 
@@ -115,8 +157,9 @@ backend/
 | Fase | Descrição | Situação |
 |---|---|---|
 | 1 | Estrutura, PostgreSQL local, `/health` | ✅ concluída |
-| 2 | Banco de dados (migrations e seeds) | próxima |
-| 3–24 | Backend base, auth, produtos, carrinho, checkout, pedidos, painéis, segurança, testes, deploy | pendente |
+| 2 | Banco de dados (migrations e seeds) | ✅ concluída |
+| 3 | Backend base | próxima |
+| 4–24 | Auth, produtos, carrinho, checkout, pedidos, painéis, segurança, testes, deploy | pendente |
 
 ## Padrões da API
 
