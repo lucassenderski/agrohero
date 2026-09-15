@@ -1,0 +1,22 @@
+{
+  "name": "agrohero-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Interface web do AgroHero - marketplace de produtos organicos",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173",
+    "lint": "echo \"(lint sera configurado na FASE 15)\" && exit 0"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  }
+}

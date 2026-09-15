@@ -1,0 +1,49 @@
+# ==========================================================
+# AgroHero - arquivos que NUNCA devem ir para o Git
+# ==========================================================
+
+# Dependencias
+node_modules/
+.pnp
+.pnp.js
+
+# Variaveis de ambiente (contem segredos: JWT_SECRET, senhas de banco)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Builds
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Cobertura de testes
+coverage/
+.nyc_output/
+
+# Editores
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Uploads locais de imagem (nao versionar arquivos enviados por usuarios)
+backend/uploads/
+
+# Dados locais do PostgreSQL (caso use volume em pasta)
+pgdata/

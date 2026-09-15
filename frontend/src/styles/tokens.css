@@ -1,0 +1,87 @@
+/*
+ * Tokens de design do AgroHero.
+ *
+ * Centralizar cores, espacamento e tipografia em variaveis CSS evita
+ * "numeros magicos" espalhados pelos componentes e permite mudar a
+ * identidade visual inteira editando um arquivo.
+ *
+ * Paleta: verdes de lavoura como cor principal, terracota como acento.
+ */
+
+:root {
+  /* --- Cores da marca --- */
+  --cor-primaria-50: #f0f9f1;
+  --cor-primaria-100: #dcf0de;
+  --cor-primaria-200: #bbe1c0;
+  --cor-primaria-300: #8dca96;
+  --cor-primaria-400: #5aab68;
+  --cor-primaria-500: #3a8e4a;
+  --cor-primaria-600: #2a7038;
+  --cor-primaria-700: #22592e;
+  --cor-primaria-800: #1d4726;
+  --cor-primaria-900: #183a20;
+
+  --cor-acento-100: #fbe9e0;
+  --cor-acento-400: #e07a4f;
+  --cor-acento-500: #c95f33;
+  --cor-acento-600: #a84a26;
+
+  /* --- Cores neutras --- */
+  --cor-texto: #1f2933;
+  --cor-texto-suave: #52606d;
+  --cor-texto-claro: #7b8794;
+  --cor-borda: #d9e0e5;
+  --cor-borda-suave: #eef2f4;
+  --cor-fundo: #f7f9fa;
+  --cor-superficie: #ffffff;
+
+  /* --- Feedback --- */
+  --cor-sucesso: #2a7038;
+  --cor-sucesso-fundo: #e8f5ea;
+  --cor-erro: #b3261e;
+  --cor-erro-fundo: #fdecea;
+  --cor-aviso: #8a5a00;
+  --cor-aviso-fundo: #fff6e5;
+  --cor-info: #1a5c8a;
+  --cor-info-fundo: #e8f2fa;
+
+  /* --- Espacamento (escala de 4px) --- */
+  --esp-1: 0.25rem;
+  --esp-2: 0.5rem;
+  --esp-3: 0.75rem;
+  --esp-4: 1rem;
+  --esp-5: 1.5rem;
+  --esp-6: 2rem;
+  --esp-7: 3rem;
+  --esp-8: 4rem;
+
+  /* --- Tipografia --- */
+  --fonte-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --texto-xs: 0.75rem;
+  --texto-sm: 0.875rem;
+  --texto-base: 1rem;
+  --texto-lg: 1.125rem;
+  --texto-xl: 1.375rem;
+  --texto-2xl: 1.75rem;
+  --texto-3xl: 2.25rem;
+  --peso-normal: 400;
+  --peso-medio: 500;
+  --peso-forte: 700;
+
+  /* --- Bordas e sombras --- */
+  --raio-sm: 6px;
+  --raio-md: 10px;
+  --raio-lg: 16px;
+  --raio-completo: 999px;
+  --sombra-sm: 0 1px 2px rgba(31, 41, 51, 0.08);
+  --sombra-md: 0 4px 12px rgba(31, 41, 51, 0.1);
+  --sombra-lg: 0 10px 24px rgba(31, 41, 51, 0.14);
+
+  /* --- Layout --- */
+  --largura-maxima: 1200px;
+  --altura-header: 4rem;
+
+  /* --- Transicao padrao --- */
+  --transicao: 160ms ease-in-out;
+}

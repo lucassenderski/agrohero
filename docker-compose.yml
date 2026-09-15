@@ -1,0 +1,41 @@
+# ==========================================================
+# AgroHero - Ambiente de desenvolvimento local
+# ==========================================================
+# Sobe o PostgreSQL 16 usado pelo backend em desenvolvimento.
+#
+# COMO USAR (na raiz do projeto):
+#   docker compose up -d        -> inicia o banco
+#   docker compose ps           -> mostra o status
+#   docker compose logs -f db   -> acompanha os logs
+#   docker compose down         -> para o banco (mantem os dados)
+#   docker compose down -v      -> para o banco E APAGA os dados
+# ==========================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: agrohero_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agrohero}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agrohero_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-agrohero}
+      # Forca UTF-8 e ordenacao previsivel para os testes de busca
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      # Porta no host : porta no container
+      # 5433 evita conflito com um PostgreSQL que ja exista na 5432
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - agrohero_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # O backend so deve subir quando o banco estiver realmente aceitando conexoes
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agrohero} -d ${POSTGRES_DB:-agrohero}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  agrohero_pgdata:
+    name: agrohero_pgdata
