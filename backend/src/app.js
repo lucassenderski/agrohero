@@ -6,6 +6,7 @@ import env from './config/env.js';
 import logger from './config/logger.js';
 import rotas from './routes/index.js';
 import healthRoutes from './routes/healthRoutes.js';
+import docsRoutes from './routes/docsRoutes.js';
 import { AppError } from './utils/AppError.js';
 import { limiteGeral } from './middlewares/rateLimit.js';
 import { notFound } from './middlewares/notFound.js';
@@ -92,7 +93,17 @@ app.use(
   }),
 );
 
-/* Limite geral de requisicoes em toda a API. */
+/*
+ * Documentacao interativa, montada ANTES do rate limit geral.
+ *
+ * Motivo pratico: o Swagger UI carrega dezenas de arquivos estaticos
+ * (JS, CSS, fonte) ao abrir a pagina. Se ficasse atras do limitador,
+ * algumas aberturas estourariam a cota e o usuario veria 429 em vez da
+ * documentacao. Documentacao nao e trafego de negocio.
+ */
+app.use('/api/v1/docs', docsRoutes);
+
+/* Limite de requisicoes em toda a API. */
 app.use('/api', limiteGeral);
 
 /* Raiz, util para conferir no navegador que a API esta no ar. */

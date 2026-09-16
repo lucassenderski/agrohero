@@ -158,8 +158,60 @@ backend/
 |---|---|---|
 | 1 | Estrutura, PostgreSQL local, `/health` | ✅ concluída |
 | 2 | Banco de dados (migrations e seeds) | ✅ concluída |
-| 3 | Backend base | próxima |
-| 4–24 | Auth, produtos, carrinho, checkout, pedidos, painéis, segurança, testes, deploy | pendente |
+| 3 | Backend base (validação, paginação, repositório, docs) | ✅ concluída |
+| 4 | Usuários | próxima |
+| 5–24 | Auth, produtos, carrinho, checkout, pedidos, painéis, segurança, testes, deploy | pendente |
+
+## Documentação da API
+
+```bash
+npm run dev
+```
+
+Abra **http://localhost:3001/api/v1/docs** para a interface interativa (Swagger UI), que permite executar as requisições direto do navegador.
+
+A especificação em JSON fica em `/api/v1/docs/openapi.json` — útil para importar no Insomnia ou Postman.
+
+Em produção a documentação vem **desativada** (`ENABLE_API_DOCS=false`), porque expõe a superfície inteira da API. Para liberá-la, defina `ENABLE_API_DOCS=true` no ambiente.
+
+A especificação em `src/docs/openapi.js` documenta apenas endpoints que existem de verdade, e há um teste que verifica isso: se alguém documentar uma rota inexistente, o teste falha.
+
+## Padrões de código
+
+### Validação de entrada
+
+Toda rota que recebe dados passa pelo middleware `validar`:
+
+```js
+router.post('/',
+  checkJwt,
+  requireRole('agricultor'),
+  validar({ body: criarProdutoSchema }),
+  produtoController.criar
+);
+```
+
+O controller lê `req.dadosValidados.body` — **nunca** `req.body`. A diferença é intencional: se os dados validados sobrescrevessem `req.body`, um controller poderia ler um campo não validado achando que passou pela validação.
+
+Como o Zod remove campos não declarados no schema, enviar `{"tipo": "administrador"}` no cadastro não tem efeito (mass assignment fechado).
+
+### Erros
+
+Sempre lance `AppError` com mensagem em português, status HTTP e código legível:
+
+```js
+throw new AppError('Estoque insuficiente para Tomate.', 409, 'ESTOQUE_INSUFICIENTE');
+```
+
+Erros de validação saem como `400 DADOS_INVALIDOS` com `detalhes: [{ campo, mensagem }]`, que o frontend usa para destacar os inputs.
+
+### SQL
+
+Todo SQL é parametrizado (`$1`, `$2`). Ordenação nunca é interpolada: use `resolverOrdenacao()` do `RepositorioBase`, que trabalha com lista branca de opções.
+
+### Transações
+
+Operações que tocam várias tabelas usam `repositorio.emTransacao(async (cliente) => {...})`. É obrigatório no checkout: baixa de estoque, pedido e pagamento precisam ser atômicos.
 
 ## Padrões da API
 

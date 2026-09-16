@@ -15,8 +15,8 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 0 | Planejamento e arquitetura | ✅ |
 | 1 | Estrutura, PostgreSQL local, `/health`, testes | ✅ |
 | 2 | Banco de dados (migrations e seeds) | ✅ |
-| 3 | Backend base | próxima |
-| 4 | Usuários | pendente |
+| 3 | Backend base (validação, paginação, repositório, docs) | ✅ |
+| 4 | Usuários | próxima |
 | 5 | Autenticação JWT | pendente |
 | 6 | Agricultores | pendente |
 | 7 | Categorias | pendente |
@@ -230,6 +230,8 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
 | GET | `/health` | 🔓 | Saúde da API e do banco |
+| GET | `/api/v1/docs` | 🔓 | Documentação interativa (Swagger UI) |
+| GET | `/api/v1/docs/openapi.json` | 🔓 | Especificação OpenAPI em JSON |
 | POST | `/auth/register` | 🔓 | Cadastro |
 | POST | `/auth/login` | 🔓 | Login (retorna JWT) |
 | GET | `/usuarios/profile` | 🔐 | Perfil do usuário logado |
@@ -254,6 +256,12 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | GET | `/admin/*` | 🛡️ | Métricas, usuários, moderação |
 
 Filtros de `/produtos`: `busca`, `categoria_id`, `agricultor_id`, `cidade`, `estado`, `preco_min`, `preco_max`, `disponivel`, `ordenar`, `pagina`, `limite`.
+
+Documentação interativa das rotas já implementadas: **http://localhost:3001/api/v1/docs**
+
+O Swagger UI executa as requisições direto do navegador, o que ajuda a testar cada fase conforme ela é implementada.
+
+> As rotas marcadas como planejadas ainda **não** existem. Cada uma entra nesta tabela e no Swagger na fase em que for implementada, para que a documentação nunca descreva algo que não funciona.
 
 ---
 

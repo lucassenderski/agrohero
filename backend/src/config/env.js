@@ -15,6 +15,17 @@ const ambienteSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
 
+  /*
+   * Libera a documentacao Swagger em producao. O padrao e desligada,
+   * porque expor a superficie completa da API facilita a vida de quem
+   * procura endpoint sem protecao. Em desenvolvimento ela fica sempre
+   * disponivel.
+   */
+  ENABLE_API_DOCS: z
+    .string()
+    .optional()
+    .transform((valor) => valor === 'true'),
+
   DATABASE_URL: z.string().min(1, 'DATABASE_URL e obrigatoria'),
   DATABASE_URL_TEST: z.string().optional(),
 
