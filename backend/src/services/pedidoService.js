@@ -1,5 +1,6 @@
 import pedidoRepository from '../repositories/pedidoRepository.js';
 import agricultorRepository from '../repositories/agricultorRepository.js';
+import paymentService from './paymentService.js';
 import { erros } from '../utils/AppError.js';
 import logger from '../config/logger.js';
 import { lerPaginacao, montarPaginacao } from '../utils/paginacao.js';
@@ -390,6 +391,23 @@ export async function cancelar(usuario, pedidoId) {
     'Pedido cancelado',
   );
 
+  /*
+   * ESTORNO (FASE 13).
+   *
+   * FORA da transacao, de proposito. O estorno e uma chamada HTTP a um
+   * servico externo que pode levar segundos. Faze-lo dentro da
+   * transacao manteria uma conexao do pool aberta e uma linha travada
+   * durante toda a espera - com alguns cancelamentos simultaneos, o pool
+   * esgota e a API inteira para.
+   *
+   * A consequencia e que o estorno pode falhar DEPOIS do cancelamento ja
+   * ter sido confirmado. Nesse caso o cancelamento NAO e desfeito: o
+   * cliente tem o direito de cancelar, e devolver o dinheiro e obrigacao
+   * nossa, nao uma condicao. Devolvemos `estorno_pendente: true` para
+   * operacao saber que aquele pagamento precisa de atencao manual.
+   */
+  const estorno = await tentarEstornarPagamento(pedidoId);
+
   const atualizado = await pedidoRepository.buscarPorId(pedidoId);
 
   return {
@@ -399,7 +417,69 @@ export async function cancelar(usuario, pedidoId) {
       produto_id: item.produto_id,
       quantidade: item.quantidade,
     })),
+    ...estorno,
   };
+}
+
+/*
+ * Estorna o pagamento do pedido, se houver um aprovado.
+ *
+ * Devolve um objeto para compor a resposta:
+ *   { estornado: true }                                  -> deu certo
+ *   { estorno_pendente: true, motivo }                   -> precisa de acao
+ *   {}                                                   -> nada a estornar
+ *
+ * Por que devolve e nao lanca: o cancelamento ja aconteceu e nao vai ser
+ * desfeito por uma falha de estorno. Engolir a falha seria pior - a
+ * operacao precisa saber. Entao o resultado sobe como dado, e nao como
+ * excecao que abortaria uma operacao ja concluida.
+ */
+async function tentarEstornarPagamento(pedidoId) {
+  const pagamento = await pedidoRepository.buscarPagamentoPorPedido(pedidoId);
+
+  /* Nada a estornar: pedido cancelado antes de pagar, ou ja reembolsado. */
+  if (!pagamento || pagamento.status !== 'APROVADO') {
+    return {};
+  }
+
+  try {
+    const resultado = await paymentService.estornar({
+      identificadorExterno: pagamento.identificador_externo,
+      valor: pagamento.valor,
+      motivo: `Pedido #${pedidoId} cancelado`,
+    });
+
+    await pedidoRepository.atualizarPagamento(pagamento.id, {
+      status: 'REEMBOLSADO',
+      resumo: resultado.resumo,
+    });
+
+    logger.info(
+      { pedidoId, pagamentoId: pagamento.id, valor: pagamento.valor },
+      'Pagamento estornado apos cancelamento',
+    );
+
+    return { estornado: true, valor_estornado: Number(pagamento.valor) };
+  } catch (erro) {
+    /*
+     * Falha de estorno com o pedido ja cancelado: e um problema de
+     * dinheiro, nao de pedido. Logamos em nivel de erro com o
+     * identificador da transacao no gateway, que e o que a operacao
+     * precisa para resolver no painel do provedor.
+     */
+    logger.error(
+      {
+        pedidoId,
+        pagamentoId: pagamento.id,
+        identificadorExterno: pagamento.identificador_externo,
+        valor: pagamento.valor,
+        erro: erro.message,
+      },
+      'Falha ao estornar pagamento de pedido cancelado; estorno PENDENTE',
+    );
+
+    return { estorno_pendente: true, motivo: 'FALHA_ESTORNO' };
+  }
 }
 
 /*

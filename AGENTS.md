@@ -98,9 +98,9 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 
 ## Estado
 
-Fases 0–12 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho, endereços, checkout transacional, pedidos com transição de status e regra multi-agricultor). Próxima: FASE 13 (webhook e estorno de pagamento).
+Fases 0–13 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho, endereços, checkout transacional, pedidos com transição de status e a regra multi-agricultor, webhooks de pagamento com assinatura HMAC e estorno no cancelamento). Próxima: FASE 14 (avaliações).
 Divergências encontradas no ambiente (ex.: container de banco caído) foram diagnosticadas e resolvidas, não contornadas.
-Suíte de testes: 438 testes, 14 suítes, todos passando.
+Suíte de testes: 464 testes, 15 suítes, todos passando.
 
 ## Armadilhas já encontradas (não repetir)
 
@@ -189,3 +189,19 @@ Suíte de testes: 438 testes, 14 suítes, todos passando.
 **Rate limit de login é 10 por 15 minutos e atrapalha validação manual em sequência.** Scripts que fazem vários logins seguidos recebem `MUITAS_TENTATIVAS` (429). Para validar manualmente, gerar o token direto com `gerarToken` a partir do banco em vez de logar a cada passo.
 
 **Frete precisa ser calculado antes do total, nunca depois.** O banco exige `valor_total = valor_produtos + valor_frete`, e o frete gratis depende do valor dos PRODUTOS. Calcular o frete a partir do total seria circular.
+
+**Validar assinatura não é o mesmo que confiar no conteúdo.** O webhook tem assinatura HMAC válida e mesmo assim o status do corpo é IGNORADO: o servidor chama `paymentService.consultar()` e aplica a resposta do gateway. Sem isso, um webhook antigo reenviado (assinatura válida, evento superado) reverteria um estorno. A assinatura prova a ORIGEM; a reconciliação prova o ESTADO.
+
+**Gateway fake que ecoa o status local torna a reconciliação inútil.** A primeira versão de `gatewayFake.consultar()` devolvia o `statusAtual` que o banco informava — um espelho que nunca discorda. Um fake que sempre concorda esconde exatamente o bug que a reconciliação existe para pegar. A correção foi um ledger em memória, com `_simularPagamentoConfirmado`/`_registrarStatus` representando um evento externo (o pagador concluiu o PIX no banco dele). O teste que provava o contrário falha ao trocar a consulta pelo corpo.
+
+**A assinatura cobre os BYTES, não o JSON equivalente.** `JSON.stringify(obj, null, 2)` e `JSON.stringify(obj)` são o mesmo objeto e strings diferentes: a assinatura de uma não vale para a outra. Por isso `express.json({ verify })` guarda `req.rawBody` — re-serializar o objeto parseado muda espaços, ordem de chaves e formato de número, e corromperia a verificação.
+
+**Comparar assinaturas com `===` vaza o segredo pelo tempo de resposta.** O comparador para no primeiro byte diferente, então medir o tempo revela a assinatura byte a byte. Usar `crypto.timingSafeEqual`, com guarda de tamanho antes (a função lança se os buffers tiverem tamanhos diferentes, e isso viraria 500).
+
+**Webhook sem segredo configurado deve ser RECUSADO, não aceito.** `verificarAssinatura` lança 500 quando `PAYMENT_WEBHOOK_SECRET` está vazio. Aceitar sem verificar transformaria um erro de configuração numa porta aberta para marcar pedidos como pagos. Falhar fechado.
+
+**Webhook responde 200 mesmo quando ignora o evento.** 404 faria o gateway reenviar para sempre um evento que nunca vai casar (de outro ambiente, ou de pagamento antigo). A exceção são erros reais: 403 para assinatura inválida e 422 para falha de reconciliação, onde o reenvio É desejado.
+
+**Estorno roda FORA da transação de cancelamento.** É chamada HTTP externa que pode levar segundos; dentro da transação, seguraria uma conexão do pool e uma linha travada durante toda a espera — alguns cancelamentos simultâneos esgotariam o pool. Consequência aceita: o estorno pode falhar depois do cancelamento confirmado. Nesse caso o cancelamento NÃO é desfeito (devolver dinheiro é obrigação, não condição) e a resposta traz `estorno_pendente: true` para a operação agir.
+
+**`env.PAYMENT_GATEWAY` é mutável em runtime, e os testes dependem disso.** O teste de falha de estorno troca o gateway por um inexistente dentro de um `try/finally`. `config/env.js` exporta o objeto `env`, e não valores congelados — o `finally` restaura.

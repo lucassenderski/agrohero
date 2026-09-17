@@ -658,6 +658,55 @@ const schemas = {
     },
   },
 
+  WebhookPagamentoEntrada: {
+    type: 'object',
+    description:
+      'Corpo da notificacao do gateway. O `status` enviado aqui e IGNORADO: o servidor reconcilia com o gateway e usa a resposta dele. O campo existe apenas para compatibilidade com gateways que o enviam.',
+    properties: {
+      pedido_id: {
+        type: 'integer',
+        example: 1,
+        description: 'Referencia ao nosso pedido (external_reference no gateway).',
+      },
+      identificador: {
+        type: 'string',
+        example: 'FAKE-1757890000000-A1B2C3D4',
+        description: 'Id da transacao no gateway.',
+      },
+      status: {
+        type: 'string',
+        example: 'APROVADO',
+        description: 'Informativo. Nao define o status aplicado.',
+      },
+    },
+  },
+
+  WebhookPagamentoResultado: {
+    type: 'object',
+    properties: {
+      processado: {
+        type: 'boolean',
+        example: true,
+        description: 'false quando o evento nao mudou nada (duplicado, desconhecido ou recusado).',
+      },
+      motivo: {
+        type: 'string',
+        enum: [
+          'PAGAMENTO_NAO_ENCONTRADO',
+          'STATUS_JA_APLICADO',
+          'TRANSICAO_RECUSADA',
+        ],
+        description:
+          'Presente quando `processado` e false. PAGAMENTO_NAO_ENCONTRADO tambem responde 200: o gateway nao deve reenviar um evento que nunca vai casar.',
+      },
+      status: {
+        type: 'string',
+        example: 'APROVADO',
+        description: 'Status do pagamento apos o processamento (ou o que permaneceu).',
+      },
+    },
+  },
+
   PerfilCompleto: {
     allOf: [
       { $ref: '#/components/schemas/UsuarioPublico' },
@@ -879,6 +928,7 @@ export const openapi = {
     { name: 'Enderecos', description: 'Enderecos de entrega do consumidor (dado pessoal)' },
     { name: 'Checkout', description: 'Previa e finalizacao da compra (transacao, calculo no servidor)' },
     { name: 'Pedidos', description: 'Pedidos, itens e transicao de status (visao por tipo de usuario)' },
+    { name: 'Pagamentos', description: 'Webhooks do gateway (assinatura HMAC, sem autenticacao de usuario)' },
     { name: 'Admin', description: 'Gestao administrativa (requer perfil administrador)' },
   ],
 
@@ -2760,6 +2810,107 @@ export const openapi = {
             description: 'Nenhum item pode ir para o status pedido.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
+        },
+      },
+    },
+    '/api/v1/webhooks/pagamento': {
+      post: {
+        tags: ['Pagamentos'],
+        summary: 'Notificacao de pagamento do gateway',
+        description: [
+          'Rota PUBLICA - a unica de negocio sem `checkJwt`. Quem chama e o gateway, que nao tem usuario no sistema.',
+          '',
+          'A autenticacao e a assinatura HMAC-SHA256 do CORPO BRUTO, no header `x-agrohero-signature`, no formato `sha256=<hex>`. O segredo e `PAYMENT_WEBHOOK_SECRET`.',
+          '',
+          'O status do corpo e IGNORADO. O servidor consulta o gateway e aplica a resposta DELE (reconciliacao), o que neutraliza replay de evento antigo.',
+          '',
+          'Responde 200 mesmo quando nada muda (evento duplicado ou pagamento desconhecido): um status de erro faria o gateway reenviar indefinidamente um evento que nunca vai casar. 403 significa assinatura invalida.',
+        ].join('\n'),
+        parameters: [
+          {
+            name: 'x-agrohero-signature',
+            in: 'header',
+            required: true,
+            schema: { type: 'string', example: 'sha256=3f2a...' },
+            description: 'HMAC-SHA256 do corpo bruto, prefixado com "sha256=".',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/WebhookPagamentoEntrada' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Notificacao recebida (processada ou ignorada de forma justificada).',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/WebhookPagamentoResultado' },
+                  },
+                },
+              },
+            },
+          },
+          403: {
+            description: 'Assinatura ausente ou invalida.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+          422: {
+            description: 'Falha ao reconciliar com o gateway; o gateway deve tentar de novo.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+          500: {
+            description: 'Webhook nao configurado (PAYMENT_WEBHOOK_SECRET ausente).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/webhooks/pagamento/{identificador}': {
+      parameters: [
+        {
+          name: 'identificador',
+          in: 'path',
+          required: true,
+          schema: { type: 'string' },
+          description: 'Id da transacao no gateway.',
+        },
+      ],
+      post: {
+        tags: ['Pagamentos'],
+        summary: 'Notificacao de pagamento com identificador na URL',
+        description:
+          'Mesma operacao, para gateways que mandam o id no caminho em vez do corpo (o Mercado Pago usa `?data.id=`, outros usam o path). A assinatura e verificada da mesma forma.',
+        parameters: [
+          {
+            name: 'x-agrohero-signature',
+            in: 'header',
+            required: true,
+            schema: { type: 'string' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Notificacao recebida.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/WebhookPagamentoResultado' },
+                  },
+                },
+              },
+            },
+          },
+          403: { $ref: '#/components/responses/SemPermissao' },
         },
       },
     },

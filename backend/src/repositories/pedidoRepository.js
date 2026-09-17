@@ -161,12 +161,35 @@ export class PedidoRepository extends RepositorioBase {
     return linhas[0] ?? null;
   }
 
-  /* Busca um pagamento pelo identificador do gateway (uso em webhook). */
+  /*
+   * Busca um pagamento pelo identificador do gateway (uso em webhook).
+   *
+   * Comparacao por texto e nao por inteiro: `identificador_externo` e
+   * VARCHAR porque cada gateway usa um formato proprio (o Mercado Pago
+   * usa um numero, o fake usa "FAKE-<timestamp>-<sufixo>"). Converter
+   * para inteiro quebraria o fake.
+   */
   async buscarPagamentoPorIdentificador(identificadorExterno) {
     return this.buscarUm(
       `SELECT id, pedido_id, metodo, status, valor, identificador_externo
          FROM pagamentos WHERE identificador_externo = $1`,
       [identificadorExterno],
+    );
+  }
+
+  /*
+   * Busca o pagamento mais recente de um pedido (uso em webhook).
+   *
+   * "Mais recente" porque um pedido pode ter mais de uma tentativa: a
+   * primeira recusada, a segunda aprovada. Ordenar por `id DESC` e mais
+   * preciso que `criado_em DESC` - dois pagamentos criados no mesmo
+   * milissegundo teriam o mesmo timestamp, e a ordem ficaria indefinida.
+   */
+  async buscarPagamentoPorPedido(pedidoId) {
+    return this.buscarUm(
+      `SELECT id, pedido_id, metodo, status, valor, identificador_externo
+         FROM pagamentos WHERE pedido_id = $1 ORDER BY id DESC LIMIT 1`,
+      [pedidoId],
     );
   }
 

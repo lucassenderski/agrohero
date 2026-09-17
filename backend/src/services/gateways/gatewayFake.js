@@ -29,6 +29,54 @@ function gerarIdentificador() {
 }
 
 /*
+ * LEDGER DE TRANSACOES.
+ *
+ * O gateway guarda o status de cada transacao que ele mesmo processou, e
+ * `consultar()` responde a partir DAQUI - nunca a partir do que o banco
+ * local diz.
+ *
+ * Por que isso importa: se `consultar` devolvesse o status local, a
+ * reconciliacao viraria um espelho e nunca discordaria de nada. Um fake
+ * que sempre concorda esconde exatamente o bug que a reconciliacao
+ * existe para pegar. Com um ledger proprio, o gateway tem opiniao, e o
+ * sistema pode discordar dele de verdade.
+ *
+ * Em memoria porque o fake e de desenvolvimento. Um reinicio limpa o
+ * ledger, o que e aceitavel: transacao simulada nao vale entre sessoes.
+ */
+const ledger = new Map();
+
+/*
+ * CONTROLE DE SIMULACAO (somente o gateway fake tem isto).
+ *
+ * Representa um evento EXTERNO: o pagador concluiu o PIX no banco dele.
+ * Nao e algo que o nosso sistema decide - e justamente por isso que ele
+ * nao aparece na API: quem marca o pagamento como aprovado de verdade e
+ * o gateway, e o nosso lado so descobre por webhook.
+ *
+ * O nome com underscore sinaliza que e controle de teste, e nao parte do
+ * contrato de adaptador.
+ */
+export function _simularPagamentoConfirmado(identificadorExterno) {
+  ledger.set(String(identificadorExterno), 'APROVADO');
+}
+
+/* Registra um status arbitrario no ledger (monta cenarios de teste). */
+export function _registrarStatus(identificadorExterno, status) {
+  ledger.set(String(identificadorExterno), status);
+}
+
+/* Remove uma transacao do ledger, simulando um gateway sem esse registro. */
+export function _limparLedger(identificadorExterno) {
+  ledger.delete(String(identificadorExterno));
+}
+
+/* Limpa o ledger inteiro. Usado entre testes para evitar contaminacao. */
+export function _limparTudo() {
+  ledger.clear();
+}
+
+/*
  * Processa um pagamento.
  *
  * Contrato que QUALQUER adaptador de gateway precisa cumprir - este e o
@@ -56,6 +104,9 @@ export async function processar({ valor, metodo, pedidoId, descricao }) {
   }
 
   const identificadorExterno = gerarIdentificador();
+
+  /* O gateway registra a transacao no proprio ledger. */
+  ledger.set(identificadorExterno, status);
 
   logger.info(
     { pedidoId, metodo, valor, status, identificadorExterno, gateway: 'fake' },
@@ -95,6 +146,8 @@ export async function estornar({ identificadorExterno, valor, motivo }) {
     'Estorno simulado processado',
   );
 
+  ledger.set(String(identificadorExterno), 'REEMBOLSADO');
+
   return {
     status: 'REEMBOLSADO',
     identificadorExterno,
@@ -104,17 +157,28 @@ export async function estornar({ identificadorExterno, valor, motivo }) {
 }
 
 /*
- * Consulta o status de um pagamento.
+ * Consulta o status de um pagamento NO GATEWAY.
  *
- * No gateway real serve para reconciliar quando o webhook se perde. Aqui
- * devolve o status que foi passado, porque o estado autoritativo esta no
- * nosso banco.
+ * Responde a partir do ledger - o estado que o GATEWAY conhece -, e nao
+ * do `statusAtual` que o nosso banco informou. `statusAtual` fica na
+ * assinatura apenas por compatibilidade de contrato com adaptadores
+ * reais e NAO e usado na resposta.
+ *
+ * E essa independencia que torna a reconciliacao um teste de verdade: se
+ * o nosso banco divergir do gateway, a consulta revela a divergencia em
+ * vez de confirmar o que ja acreditavamos.
+ *
+ * Transacao desconhecida (nao passou por este processo, ou o ledger foi
+ * limpo por um reinicio) devolve PENDENTE: nunca inventamos APROVADO
+ * para algo que nao vimos processar.
  */
-export async function consultar({ identificadorExterno, statusAtual }) {
+export async function consultar({ identificadorExterno }) {
+  const status = ledger.get(String(identificadorExterno)) ?? 'PENDENTE';
+
   return {
-    status: statusAtual ?? 'PENDENTE',
+    status,
     identificadorExterno,
-    resumo: { gateway: 'fake', consulta: true },
+    resumo: { gateway: 'fake', consulta: true, status },
   };
 }
 

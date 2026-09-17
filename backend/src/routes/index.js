@@ -5,6 +5,7 @@ import agricultorRoutes from './agricultorRoutes.js';
 import categoriaRoutes from './categoriaRoutes.js';
 import carrinhoRoutes from './carrinhoRoutes.js';
 import checkoutRoutes from './checkoutRoutes.js';
+import webhookRoutes from './webhookRoutes.js';
 import enderecoRoutes from './enderecoRoutes.js';
 import pedidoRoutes from './pedidoRoutes.js';
 import produtoRoutes from './produtoRoutes.js';
@@ -63,6 +64,13 @@ router.use('/checkout', checkoutRoutes);
 
 /* Pedidos: consumidor, agricultor e admin, com visao por tipo. */
 router.use('/pedidos', pedidoRoutes);
+
+/*
+ * Webhooks de pagamento. Unica rota de negocio SEM checkJwt: quem chama
+ * e o gateway, que nao tem usuario aqui. A autenticacao e a assinatura
+ * HMAC do corpo, verificada no controller.
+ */
+router.use('/webhooks', webhookRoutes);
 
 /*
  * Area administrativa. Todas as rotas daqui exigem administrador

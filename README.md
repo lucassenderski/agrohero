@@ -25,8 +25,8 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 10 | Carrinho | ✅ |
 | 11 | Checkout | ✅ |
 | 12 | Pedidos | ✅ |
-| 13 | Pagamentos | próxima |
-| 14 | Avaliações | pendente |
+| 13 | Pagamentos (webhook e estorno) | ✅ |
+| 14 | Avaliações | próxima |
 | 15 | Frontend | pendente |
 | 16 | Integração frontend + backend | pendente |
 | 17 | Painel do consumidor | pendente |
@@ -135,6 +135,60 @@ cd backend && npm test
 ```
 
 Os testes **recriam o schema do zero** a cada execução, então não dependem de você ter rodado as migrations antes.
+
+### 7. Variáveis sensíveis
+
+O `.env` fica fora do Git (está no `.gitignore`). O `.env.example` mostra só os nomes, com valores de exemplo. Duas chaves merecem atenção:
+
+| Variável | Para que serve | Se faltar |
+|---|---|---|
+| `JWT_SECRET` | Assina os tokens de acesso | A aplicação não sobe (validação exige 32+ caracteres) |
+| `PAYMENT_WEBHOOK_SECRET` | Verifica a assinatura dos webhooks | Webhook recusado com 500 (falha fechada, nunca aberta) |
+
+Gere cada uma com um valor aleatório próprio:
+
+```bash
+openssl rand -hex 32
+```
+
+Usar o mesmo valor nas duas é um erro: rotacionar o segredo do webhook não deve invalidar as sessões dos usuários.
+
+### 8. Testar o webhook de pagamento
+
+O gateway `fake` só grava a transação, sem chamar serviço externo. Para simular o pagador concluindo o PIX e ver a confirmação chegar por webhook:
+
+```bash
+cd backend
+node --input-type=module -e "
+import gatewayFake from './src/services/gateways/gatewayFake.js';
+import pedidoRepository from './src/repositories/pedidoRepository.js';
+
+const pagamento = await pedidoRepository.buscarPagamentoPorPedido(1);
+gatewayFake._simularPagamentoConfirmado(pagamento.identificador_externo);
+console.log('Gateway agora diz APROVADO para', pagamento.identificador_externo);
+"
+```
+
+E envie o webhook assinado:
+
+```bash
+SECRET=$(grep '^PAYMENT_WEBHOOK_SECRET=' backend/.env | cut -d= -f2-)
+BODY='{"pedido_id":1}'
+HASH=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')
+
+curl -X POST http://localhost:3001/api/v1/webhooks/pagamento \
+  -H 'Content-Type: application/json' \
+  -H "x-agrohero-signature: sha256=$HASH" \
+  -d "$BODY"
+```
+
+Confira o resultado:
+
+```json
+{"sucesso":true,"dados":{"processado":true,"status":"APROVADO","pagamento":{...}}}
+```
+
+Se `x-agrohero-signature` estiver errado ou ausente, a resposta é **403** e nada muda. O corpo do webhook não define o status: o servidor consulta o gateway e aplica a resposta dele.
 
 ---
 
@@ -276,13 +330,12 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | DELETE | `/api/v1/pedidos/:id/itens/:itemId` | 🧑‍🌾 | Cancelar o próprio item |
 | GET | `/api/v1/admin/pedidos` | ⚙️ | Todos os pedidos |
 | PATCH | `/api/v1/admin/pedidos/:id/status` | ⚙️ | Avançar pedido inteiro |
+| POST | `/api/v1/webhooks/pagamento` | 🔓 | Notificação do gateway (assinatura HMAC) |
 
-**Planejado (Fases 13–19):**
+**Planejado (Fases 14–19):**
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| POST | `/pagamentos/:pedidoId` | 👤 | Iniciar pagamento |
-| POST | `/webhooks/pagamento` | 🔓 | Callback do gateway (assinatura verificada) |
 | POST | `/avaliacoes` | 👤 | Avaliar produto comprado |
 | GET | `/admin/*` | 🛡️ | Métricas, usuários, moderação |
 
