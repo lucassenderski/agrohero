@@ -22,8 +22,8 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 7 | Categorias | ✅ |
 | 8 | Produtos | ✅ |
 | 9 | Busca e filtros | ✅ |
-| 10 | Carrinho | próxima |
-| 11 | Checkout | pendente |
+| 10 | Carrinho | ✅ |
+| 11 | Checkout | próxima |
 | 12 | Pedidos | pendente |
 | 13 | Pagamentos | pendente |
 | 14 | Avaliações | pendente |
@@ -257,12 +257,17 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | PATCH | `/api/v1/produtos/:id/disponibilidade` | 🧑‍🌾 | Tirar do ar / recolocar |
 | PATCH | `/api/v1/produtos/:id/estoque` | 🧑‍🌾 | Repor estoque (soma) |
 | DELETE | `/api/v1/produtos/:id` | 🧑‍🌾 | Desativar (exclusão lógica) |
+| GET | `/api/v1/carrinho` | 👤 | Carrinho do consumidor (cria na 1ª chamada) |
+| POST | `/api/v1/carrinho/itens` | 👤 | Adicionar produto (soma quantidade) |
+| PATCH | `/api/v1/carrinho/itens/:produtoId` | 👤 | Definir quantidade exata |
+| DELETE | `/api/v1/carrinho/itens/:produtoId` | 👤 | Remover item |
+| DELETE | `/api/v1/carrinho` | 👤 | Esvaziar carrinho |
+| GET | `/api/v1/carrinho/validacao` | 👤 | Revalidar preços e estoque |
 
-**Planejado (Fases 10–19):**
+**Planejado (Fases 11–19):**
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| GET/POST/PUT/DELETE | `/carrinho` | 👤 | Carrinho persistente |
 | POST | `/checkout/preview` | 👤 | Recalcular valores sem gravar |
 | POST | `/checkout` | 👤 | Criar pedido (transação) |
 | GET | `/pedidos` | 👤 | Meus pedidos |

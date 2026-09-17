@@ -6,19 +6,19 @@ import { escaparTermoBusca } from '../utils/sql.js';
  *
  * O mesmo repositorio serve as leituras publicas (vitrine e busca) e o
  * CRUD do agricultor. Manter os dois aqui e deliberado: a regra de
- * visibilidade (`VISIVEL_PUBLICO`) e a projecao (`SELECT_PUBLICO`) sao
+ * visibilidade (`VISIVEL_PUBLICO_PRODUTO_PRODUTO`) e a projecao (`SELECT_PUBLICO`) sao
  * as mesmas nos dois casos, e separar em dois arquivos criaria duas
  * fontes de verdade sobre "o que e um produto visivel" - exatamente o
  * tipo de divergencia que causou o bug de categoria desativada.
  *
  * A distincao entre leitura publica e leitura do dono esta nos METODOS,
- * nao no arquivo: `listarPublicos` aplica `VISIVEL_PUBLICO`;
+ * nao no arquivo: `listarPublicos` aplica `VISIVEL_PUBLICO_PRODUTO_PRODUTO`;
  * `listarDoAgricultor` nao aplica, porque o dono precisa ver o que
  * desativou.
  */
 
 /* Colunas publicas do produto, com a media de avaliacoes da view. */
-const COLUNAS_PRODUTO = `
+export const COLUNAS_PRODUTO = `
   p.id, p.nome, p.descricao, p.preco, p.estoque, p.unidade,
   p.imagem_url, p.ativo, p.criado_em, p.atualizado_em,
   p.agricultor_id, p.categoria_id
@@ -74,7 +74,7 @@ const JOINS_VISIBILIDADE = `
  * produto usa exatamente esta string, para que a regra nao possa
  * divergir entre a listagem e o detalhe.
  */
-const VISIVEL_PUBLICO =
+export const VISIVEL_PUBLICO_PRODUTO =
   'p.ativo = TRUE AND a.ativo = TRUE AND u.ativo = TRUE AND c.ativo = TRUE';
 
 export class ProdutoRepository extends RepositorioBase {
@@ -84,7 +84,7 @@ export class ProdutoRepository extends RepositorioBase {
 
   /* Busca um produto publico pelo id. Devolve null se nao for visivel. */
   async buscarPublicoPorId(id) {
-    return this.buscarUm(`${SELECT_PUBLICO} WHERE p.id = $1 AND ${VISIVEL_PUBLICO}`, [id]);
+    return this.buscarUm(`${SELECT_PUBLICO} WHERE p.id = $1 AND ${VISIVEL_PUBLICO_PRODUTO}`, [id]);
   }
 
   /*
@@ -105,7 +105,7 @@ export class ProdutoRepository extends RepositorioBase {
       'recentes',
     );
 
-    const filtros = [VISIVEL_PUBLICO, 'p.agricultor_id = $1'];
+    const filtros = [VISIVEL_PUBLICO_PRODUTO, 'p.agricultor_id = $1'];
     const parametros = [agricultorId];
 
     if (categoriaId) {
@@ -146,7 +146,7 @@ export class ProdutoRepository extends RepositorioBase {
    * mostraria um total que nao corresponde a lista.
    */
   montarFiltrosPublicos({ busca, categoriaId, agricultorId, cidade, estado, precoMin, precoMax, disponivel }) {
-    const filtros = [VISIVEL_PUBLICO];
+    const filtros = [VISIVEL_PUBLICO_PRODUTO];
     const parametros = [];
 
     if (busca) {
@@ -230,7 +230,7 @@ export class ProdutoRepository extends RepositorioBase {
   /*
    * Listagem do proprio agricultor.
    *
-   * Nao aplica `VISIVEL_PUBLICO`: o dono precisa ver os produtos que
+   * Nao aplica `VISIVEL_PUBLICO_PRODUTO_PRODUTO`: o dono precisa ver os produtos que
    * desativou e os que estao esgotados. Tambem nao depende de categoria
    * ativa - se o admin desativou a categoria, o agricultor continua
    * vendo o proprio produto e consegue troca-lo de categoria.

@@ -3,6 +3,7 @@ import authRoutes from './authRoutes.js';
 import usuarioRoutes from './usuarioRoutes.js';
 import agricultorRoutes from './agricultorRoutes.js';
 import categoriaRoutes from './categoriaRoutes.js';
+import carrinhoRoutes from './carrinhoRoutes.js';
 import produtoRoutes from './produtoRoutes.js';
 import adminRoutes from './adminRoutes.js';
 
@@ -43,6 +44,12 @@ router.use('/categorias', categoriaRoutes);
 router.use('/produtos', produtoRoutes);
 
 /*
+ * Carrinho: recurso privado do consumidor autenticado. Nao ha
+ * `carrinho_id` em rota nenhuma - o carrinho e sempre o do token.
+ */
+router.use('/carrinho', carrinhoRoutes);
+
+/*
  * Area administrativa. Todas as rotas daqui exigem administrador
  * (checkJwt + requireRole aplicados no proprio arquivo).
  */
@@ -53,7 +60,6 @@ router.use('/admin', adminRoutes);
  * aqui, sempre nesta ordem de middleware:
  *   autenticacao -> autorizacao -> validacao -> controller
  *
- *   router.use('/carrinho', carrinhoRoutes);
  *   router.use('/checkout', checkoutRoutes);
  *   router.use('/pedidos', pedidoRoutes);
  *   router.use('/avaliacoes', avaliacaoRoutes);

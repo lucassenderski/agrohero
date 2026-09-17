@@ -98,9 +98,9 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 
 ## Estado
 
-Fases 0–9 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros). Próxima: FASE 10 (carrinho).
+Fases 0–10 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho). Próxima: FASE 11 (checkout transacional).
 Divergências encontradas no ambiente (ex.: container de banco caído) foram diagnosticadas e resolvidas, não contornadas.
-Suíte de testes: 292 testes, 11 suítes, todos passando.
+Suíte de testes: 335 testes, 12 suítes, todos passando.
 
 ## Armadilhas já encontradas (não repetir)
 
@@ -143,3 +143,15 @@ Suíte de testes: 292 testes, 11 suítes, todos passando.
 **Numero do placeholder `$n` e posicional e deve ser derivado do tamanho da lista de parametros.** Montar filtros dinamicos com `parametros.push(valor); filtros.push(\`col = $${parametros.length}\`)` mantem os dois sempre alinhados. Concatenar SQL com valores interpolados e o caminho para injecao; valores so entram via array de parametros.
 
 **Helper duplicado entre repositorios divergem.** `escaparTermoBusca` existia dentro de `agricultorRepository` e eu precisei dela em `produtoRepository`. Copiar teria criado duas versoes da mesma regra de escape. Extraida para `src/utils/sql.js` e importada nos dois.
+
+**A melhor defesa e nao ter o campo, nao validar o campo.** No carrinho eu poderia ter aceitado `preco` no schema e conferido contra o banco. Em vez disso o schema NAO declara preco, e a tabela `carrinho_itens` NAO tem coluna de preco - so `quantidade`. O Zod descarta o campo e o preco so pode sair de `produtos.preco`. Manipulacao de preco deixa de ser um caso a tratar e vira impossibilidade do modelo. Ao desenhar um modulo que recebe dados do cliente, a pergunta util e "como este dado poderia nem existir?" antes de "como validar este dado?".
+
+**Quando o recurso e sempre "o do token", nao coloque id na rota.** Nenhuma rota do carrinho tem `carrinho_id`: o carrinho e derivado do usuario autenticado. Sem parametro de id nao existe IDOR de carrinho - nao ha o que forjar. Antes de escrever um teste de "usuario A nao acessa o carrinho de B", vale conferir se o id precisa aparecer na URL.
+
+**Soma no banco, nao na aplicacao.** `adicionarItem` usa `INSERT ... ON CONFLICT DO UPDATE SET quantidade = carrinho_itens.quantidade + EXCLUDED.quantidade`. Um SELECT seguido de UPDATE na aplicacao abriria janela para dois cliques rapidos somarem so uma vez. Pelo mesmo motivo `obterOuCriar` do carrinho usa `ON CONFLICT DO NOTHING` + SELECT: duas abas abrindo o carrinho ao mesmo tempo nao devem produzir violacao de UNIQUE para o usuario.
+
+**Validar o TOTAL resultante, nao so o que foi enviado.** Adicionar 5 itens a um carrinho que ja tem 8, com estoque 10, precisa ser recusado. Validar apenas os 5 enviados passaria e deixaria o carrinho invalido. A checagem correta e `quantidade_existente + quantidade_enviada <= estoque`.
+
+**Arredondar dinheiro em ponto flutuante.** `0.1 * 3` em JavaScript da `0.30000000000000004`. Todo subtotal e total passa por `Number(x.toFixed(2))` antes de sair. Sem isso, o total do carrinho aparece com cauda de float na tela.
+
+**BIGINT do pg chega como string; NUMERIC chega como Number (parser do projeto).** Teste do carrinho falhou esperando `1` e recebendo `"1"` em `produto_id`. Antes de assertar, conferir o tipo da coluna: id e BIGINT (string), preco e NUMERIC (Number, por causa do parser em `pool.js`).

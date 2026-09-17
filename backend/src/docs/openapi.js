@@ -365,6 +365,68 @@ const schemas = {
     },
   },
 
+  CarrinhoItem: {
+    type: 'object',
+    description:
+      'Item do carrinho. `preco_unitario` e `subtotal` sao calculados pelo servidor a partir do preco ATUAL do produto - o carrinho nao guarda preco, entao nao ha valor antigo para divergir do banco.',
+    properties: {
+      item_id: { type: 'integer', example: 1 },
+      quantidade: { type: 'integer', example: 3 },
+      preco_unitario: { type: 'number', example: 8.5 },
+      subtotal: { type: 'number', example: 25.5 },
+      disponivel: {
+        type: 'boolean',
+        description:
+          '`false` quando o estoque caiu abaixo da quantidade ou o produto saiu do ar. O checkout recusa nesse caso.',
+      },
+      estoque_disponivel: { type: 'integer', example: 10 },
+      produto: { $ref: '#/components/schemas/ProdutoPublico' },
+    },
+  },
+
+  Carrinho: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      itens: { type: 'array', items: { $ref: '#/components/schemas/CarrinhoItem' } },
+      total_itens: { type: 'integer', example: 2 },
+      total_unidades: { type: 'integer', example: 3 },
+      total_agricultores: {
+        type: 'integer',
+        description: 'Quantos produtores distintos o carrinho envolve.',
+        example: 2,
+      },
+      valor_produtos: { type: 'number', example: 37 },
+      frete_calculado: {
+        type: 'boolean',
+        description:
+          'Sempre `false` aqui. O frete depende do endereco de entrega, escolhido no checkout.',
+        example: false,
+      },
+      atualizado_em: { type: 'string', format: 'date-time' },
+    },
+  },
+
+  CarrinhoItemEntrada: {
+    type: 'object',
+    required: ['produto_id', 'quantidade'],
+    description:
+      'NAO existe campo de preco, subtotal ou total. O Zod descarta qualquer um que for enviado, entao o preco so pode vir de produtos.preco.',
+    properties: {
+      produto_id: { type: 'integer', example: 1 },
+      quantidade: { type: 'integer', minimum: 1, maximum: 9999, example: 3 },
+    },
+  },
+
+  CarrinhoQuantidade: {
+    type: 'object',
+    required: ['quantidade'],
+    description: 'Substitui a quantidade do item (nao soma). Para remover, use DELETE.',
+    properties: {
+      quantidade: { type: 'integer', minimum: 1, maximum: 9999, example: 2 },
+    },
+  },
+
   PerfilCompleto: {
     allOf: [
       { $ref: '#/components/schemas/UsuarioPublico' },
@@ -579,6 +641,11 @@ export const openapi = {
     { name: 'Infraestrutura', description: 'Saude e estado da API' },
     { name: 'Autenticacao', description: 'Cadastro e login (rotas publicas)' },
     { name: 'Usuarios', description: 'Perfil do usuario autenticado (requer token)' },
+    { name: 'Agricultores', description: 'Vitrine publica do produtor e gestao do proprio perfil' },
+    { name: 'Categorias', description: 'Consulta publica do catalogo de categorias' },
+    { name: 'Produtos', description: 'Catalogo publico e gestao dos produtos pelo agricultor' },
+    { name: 'Carrinho', description: 'Carrinho do consumidor autenticado (requer perfil cliente)' },
+    { name: 'Admin', description: 'Gestao administrativa (requer perfil administrador)' },
   ],
 
   paths: {
@@ -1613,6 +1680,217 @@ export const openapi = {
             description: 'Produto desativado.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
+        },
+      },
+    },
+    '/api/v1/carrinho': {
+      get: {
+        tags: ['Carrinho'],
+        summary: 'Carrinho do consumidor autenticado',
+        description:
+          'Cria o carrinho na primeira chamada. Nao existe `carrinho_id` em rota nenhuma: o carrinho e sempre o do token, entao nao ha parametro para forjar.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Carrinho atual.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/Carrinho' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+      delete: {
+        tags: ['Carrinho'],
+        summary: 'Esvazia o carrinho',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Carrinho vazio.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/Carrinho' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+
+    '/api/v1/carrinho/validacao': {
+      get: {
+        tags: ['Carrinho'],
+        summary: 'Revalida precos e estoque antes do checkout',
+        description:
+          'Lista os itens que ficaram indisponiveis em vez de apenas falhar, para o frontend mostrar o que ajustar. Carrinho vazio devolve 422.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Resultado da validacao.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        carrinho: { $ref: '#/components/schemas/Carrinho' },
+                        pode_avancar: { type: 'boolean', example: false },
+                        problemas: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              produto_id: { type: 'integer' },
+                              nome: { type: 'string' },
+                              motivo: { type: 'string', example: 'Estoque insuficiente: voce pediu 5, ha 2.' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          422: {
+            description: 'Carrinho vazio.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/carrinho/itens': {
+      post: {
+        tags: ['Carrinho'],
+        summary: 'Adiciona produto ao carrinho',
+        description:
+          'A quantidade e SOMADA a que ja existe. O estoque e conferido contra o total resultante: adicionar 5 quando ja havia 8 com estoque 10 e recusado com 409. Devolve o carrinho inteiro recalculado, para o frontend nao refazer a conta.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CarrinhoItemEntrada' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Item adicionado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/Carrinho' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          409: {
+            description: 'Estoque insuficiente.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/carrinho/itens/{produtoId}': {
+      parameters: [
+        {
+          name: 'produtoId',
+          in: 'path',
+          required: true,
+          schema: { type: 'integer', minimum: 1 },
+        },
+      ],
+      patch: {
+        tags: ['Carrinho'],
+        summary: 'Define a quantidade exata do item',
+        description:
+          'Substitui a quantidade (nao soma). Item que nao esta no carrinho devolve 404, e nao criacao implicita.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CarrinhoQuantidade' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Quantidade alterada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/Carrinho' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          409: {
+            description: 'Estoque insuficiente.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+      delete: {
+        tags: ['Carrinho'],
+        summary: 'Remove o item do carrinho',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Item removido.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/Carrinho' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
         },
       },
     },
