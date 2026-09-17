@@ -40,11 +40,16 @@ if [ "$STATUS" != "200" ]; then
 fi
 
 echo "==> Repositorio encontrado. Configurando o remote..."
+# O token vai embutido na URL para o git nao abrir prompt interativo de
+# usuario/senha (o que travaria a execucao em ambiente nao interativo).
 git remote remove origin 2>/dev/null || true
-git remote add origin "https://github.com/$REPO.git"
+git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/$REPO.git"
 
 echo "==> Enviando o historico..."
-git push -u origin master
+GIT_TERMINAL_PROMPT=0 git push -u origin main
+
+echo "==> Restaurando o remote sem o token (evita gravar a credencial no .git/config)..."
+git remote set-url origin "https://github.com/$REPO.git"
 
 echo
 echo "==> Concluido: https://github.com/$REPO"
