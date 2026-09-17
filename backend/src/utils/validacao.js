@@ -81,13 +81,28 @@ export const email = z
  * Minimo de 8 caracteres com letra e numero. Nao exigimos simbolo nem
  * maiuscula de proposito: a regra mais eficaz e comprimento, e regras
  * muito rigidas empurram o usuario para "Senha@123" previsivel.
+ *
+ * O limite de 72 e medido em BYTES, nao em caracteres, e isso importa:
+ * o bcrypt trunca silenciosamente tudo alem de 72 bytes. Em UTF-8, um
+ * caractere acentuado ocupa 2 bytes, entao 72 caracteres acentuados sao
+ * 144 bytes. O bcrypt usaria so os primeiros 72 bytes e descartaria o
+ * resto SEM AVISAR - duas senhas diferentes com o mesmo comeco passariam
+ * a autenticar uma na outra.
+ *
+ * Verificado na pratica: 'A'*70 + 'ccedilha-cedilha' e 'A'*70 +
+ * 'ccedilha-e-agudo' (senhas diferentes) produzem o mesmo hash valido.
+ * Por isso a checagem de bytes e obrigatoria.
  */
 export const senha = z
   .string({ required_error: 'A senha e obrigatoria.' })
   .min(8, 'A senha deve ter no minimo 8 caracteres.')
   .max(72, 'A senha deve ter no maximo 72 caracteres.')
   .regex(/[A-Za-z]/, 'A senha deve conter pelo menos uma letra.')
-  .regex(/[0-9]/, 'A senha deve conter pelo menos um numero.');
+  .regex(/[0-9]/, 'A senha deve conter pelo menos um numero.')
+  .refine(
+    (valor) => Buffer.byteLength(valor, 'utf8') <= 72,
+    'A senha e longa demais. Use no maximo 72 bytes (acentos contam como 2).',
+  );
 
 /* Nome de pessoa ou de propriedade. */
 export const nome = z
@@ -153,6 +168,24 @@ export const textoOpcional = (maximo, rotulo = 'O texto') =>
     .optional()
     .transform((valor) => (valor === '' ? undefined : valor));
 
+/*
+ * Telefone brasileiro.
+ *
+ * Guardamos apenas os digitos (o frontend formata na exibicao), mesma
+ * decisao do CEP. Aceitamos 10 ou 11 digitos: 10 para fixo (DDD + 8) e
+ * 11 para celular (DDD + 9).
+ */
+export const telefone = z
+  .string()
+  .trim()
+  .transform((valor) => valor.replace(/[^0-9]/g, ''))
+  .refine(
+    (digitos) => digitos.length === 10 || digitos.length === 11,
+    'O telefone deve ter 10 ou 11 digitos, com DDD.',
+  )
+  .optional()
+  .transform((valor) => (valor === '' ? undefined : valor));
+
 /* ----------------------------------------------------------
  * Execucao
  * ---------------------------------------------------------- */
@@ -198,4 +231,5 @@ export default {
   tipoUsuario,
   urlImagem,
   textoOpcional,
+  telefone,
 };

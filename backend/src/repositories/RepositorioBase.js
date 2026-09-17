@@ -49,6 +49,19 @@ export class RepositorioBase {
   }
 
   /*
+   * Executa uma query parametrizada em um cliente de transacao.
+   *
+   * Existe porque `executar` usa o pool: se fosse chamado de dentro de
+   * emTransacao, a query pegaria OUTRA conexao, fora da transacao, e nao
+   * veria as alteracoes nao commitadas - nem seria desfeita pelo ROLLBACK.
+   * Dentro de uma transacao, todo acesso precisa passar pelo mesmo cliente.
+   */
+  async executarCom(cliente, texto, parametros = []) {
+    const { rows } = await cliente.query(texto, parametros);
+    return rows;
+  }
+
+  /*
    * Executa uma operacao dentro de uma transacao.
    *
    * Delegamos ao pool, que faz BEGIN/COMMIT/ROLLBACK na mesma conexao.

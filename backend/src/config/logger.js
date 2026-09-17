@@ -19,6 +19,16 @@ const caminhosRedigidos = [
   'req.body.password',
   'req.body.cvv',
   'req.body.numero_cartao',
+  // O middleware `validar` guarda a entrada normalizada em dadosValidados.
+  // Sem estes caminhos, a senha em texto puro escaparia pela porta dos
+  // fundos: req.body.senha seria redigido, mas req.dadosValidados.senha
+  // nao, e o log de erro de validacao imprimiria a senha.
+  'req.dadosValidados.body.senha',
+  'req.dadosValidados.body.senha_atual',
+  'req.dadosValidados.body.nova_senha',
+  'req.dadosValidados.body.password',
+  'dadosValidados.body.senha',
+  'dadosValidados.senha',
   'senha',
   'senha_hash',
   'senhaAtual',
