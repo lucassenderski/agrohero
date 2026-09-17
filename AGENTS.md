@@ -98,9 +98,9 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 
 ## Estado
 
-Fases 0–13 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho, endereços, checkout transacional, pedidos com transição de status e a regra multi-agricultor, webhooks de pagamento com assinatura HMAC e estorno no cancelamento). Próxima: FASE 14 (avaliações).
+Fases 0–14 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho, endereços, checkout transacional, pedidos com transição de status e a regra multi-agricultor, webhooks de pagamento com assinatura HMAC e estorno no cancelamento, avaliações com autorização por compra recebida). Próxima: FASE 15 (frontend React/Vite).
 Divergências encontradas no ambiente (ex.: container de banco caído) foram diagnosticadas e resolvidas, não contornadas.
-Suíte de testes: 464 testes, 15 suítes, todos passando.
+Suíte de testes: 507 testes, 16 suítes, todos passando.
 
 ## Armadilhas já encontradas (não repetir)
 
@@ -143,6 +143,22 @@ Suíte de testes: 464 testes, 15 suítes, todos passando.
 **Numero do placeholder `$n` e posicional e deve ser derivado do tamanho da lista de parametros.** Montar filtros dinamicos com `parametros.push(valor); filtros.push(\`col = $${parametros.length}\`)` mantem os dois sempre alinhados. Concatenar SQL com valores interpolados e o caminho para injecao; valores so entram via array de parametros.
 
 **Helper duplicado entre repositorios divergem.** `escaparTermoBusca` existia dentro de `agricultorRepository` e eu precisei dela em `produtoRepository`. Copiar teria criado duas versoes da mesma regra de escape. Extraida para `src/utils/sql.js` e importada nos dois.
+
+**`count(*)` sem alias `AS total` faz a paginacao mentir (FASE 14).** O helper `contar()` le `linha.total`. Sem o alias, a coluna se chama `count`, `linha.total` e `undefined` e o total vira **0 sempre** - enquanto a lista de itens volta correta. A paginacao parece funcionar: a primeira pagina mostra tudo, e so o campo `paginacao.total` esta errado. Ficou meses no codigo porque nenhum teste olhava esse campo. Achei na validacao manual, comparando a resposta real com o que eu esperava. Ao escrever consulta de contagem nova, sempre `count(*)::int AS total`, e sempre um teste que verifica `paginacao.total` com valor diferente de zero.
+
+**Update parcial precisa distinguir "campo ausente" de "valor nulo".** `nota` e NOT NULL: mandar `undefined` no SET grava NULL e o banco recusa com 23502. Resolvido com `COALESCE($1, nota)`. Mas `comentario` e anulavel, e ali o COALESCE inverteria a intencao - o cliente enviaria `null` para apagar e o valor antigo voltaria. Por isso o repositorio recebe um flag `comentarioEnviado` (`Object.hasOwn(dados, 'comentario')`) e usa `CASE WHEN $2 THEN $3 ELSE comentario END`. Regra geral: campo NOT NULL aceita COALESCE, campo anulavel precisa do flag de presenca.
+
+**Autorizacao deve ficar na clausula WHERE, nao numa checagem separada.** `buscarItemEntregue(consumidorId, pedidoId, produtoId)` filtra os tres por `WHERE`. Se a checagem do dono ficasse depois, no service, existiria um caminho de codigo onde ela pode ser esquecida. Mesma ideia em `atualizar`/`remover`, que levam `AND consumidor_id = $n` no SQL.
+
+**404 e nao 403 para recurso de outro usuario.** Um 403 confirma que o recurso existe, permitindo enumerar ids e descobrir quem avaliou o que. O 404 nao distingue "nao existe" de "nao e seu", que e o comportamento correto para recurso privado.
+
+**Status por ITEM, nao pelo pedido, quando o efeito e por item (FASE 14).** Avaliar exige `pi.status = 'ENTREGUE'`. Usar `pedidos.status` travaria a avaliacao do tomate que chegou por causa do morango que ainda nao chegou - o pedido inteiro so vira ENTREGUE quando todos os itens sao entregues. Sempre que a regra for "este produto ja foi recebido", olhar o item.
+
+**Constraint UNIQUE no banco e a garantia; a consulta previa e so a mensagem.** Entre o `SELECT` "ja existe?" e o `INSERT` cabe outra requisicao. A defesa real e `avaliacoes_uma_por_produto_por_pedido`, e o repository traduz o `23505` no mesmo 409. Nao confiar na checagem previa como garantia.
+
+**Teste de fixture que falha por motivo alheio esconde o alvo.** O teste de IDOR em avaliacoes quebrava porque o "outro consumidor" usava o endereco do primeiro, e o checkout recusa entregar em endereco de terceiro. O 404 que aparecia era da criacao do pedido, nao da avaliacao - eu estaria medindo a coisa errada e chamando de aprovado. Cada ator do teste precisa das proprias fixtures.
+
+**Convencao do projeto vence a expectativa do autor do teste.** Escrevi "limite acima do maximo e reduzido" porque me pareceu razoavel. O projeto recusa com 400 desde a FASE 8 (`/produtos`, `/agricultores`), e o teste estava errado, nao o codigo. Antes de testar comportamento novo, conferir como os modulos existentes ja resolvem o mesmo caso.
 
 **A melhor defesa e nao ter o campo, nao validar o campo.** No carrinho eu poderia ter aceitado `preco` no schema e conferido contra o banco. Em vez disso o schema NAO declara preco, e a tabela `carrinho_itens` NAO tem coluna de preco - so `quantidade`. O Zod descarta o campo e o preco so pode sair de `produtos.preco`. Manipulacao de preco deixa de ser um caso a tratar e vira impossibilidade do modelo. Ao desenhar um modulo que recebe dados do cliente, a pergunta util e "como este dado poderia nem existir?" antes de "como validar este dado?".
 

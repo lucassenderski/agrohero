@@ -10,6 +10,7 @@ import enderecoRoutes from './enderecoRoutes.js';
 import pedidoRoutes from './pedidoRoutes.js';
 import produtoRoutes from './produtoRoutes.js';
 import adminRoutes from './adminRoutes.js';
+import avaliacaoRoutes from './avaliacaoRoutes.js';
 
 /*
  * Agregador das rotas de NEGOCIO, montado em /api/v1 pelo app.js.
@@ -79,11 +80,10 @@ router.use('/webhooks', webhookRoutes);
 router.use('/admin', adminRoutes);
 
 /*
- * Nas fases seguintes, cada modulo ganha seu arquivo de rotas e entra
- * aqui, sempre nesta ordem de middleware:
- *   autenticacao -> autorizacao -> validacao -> controller
- *
- *   router.use('/avaliacoes', avaliacaoRoutes);
+ * Avaliacoes: leitura publica da reputacao (produto e produtor) e
+ * escrita pelo consumidor que recebeu o produto. O checkJwt vai rota a
+ * rota, porque as leituras sao publicas.
  */
+router.use('/avaliacoes', avaliacaoRoutes);
 
 export default router;

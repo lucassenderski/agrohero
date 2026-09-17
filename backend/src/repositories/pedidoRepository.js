@@ -273,7 +273,7 @@ export class PedidoRepository extends RepositorioBase {
       [...parametros, limite, offset],
     );
 
-    const total = await this.contar(`SELECT count(*) FROM pedidos ${onde}`, parametros);
+    const total = await this.contar(`SELECT count(*)::int AS total FROM pedidos ${onde}`, parametros);
 
     return { itens, total };
   }
@@ -314,7 +314,7 @@ export class PedidoRepository extends RepositorioBase {
     );
 
     const total = await this.contar(
-      `SELECT count(*) FROM pedido_itens pi ${onde}`,
+      `SELECT count(*)::int AS total FROM pedido_itens pi ${onde}`,
       parametros,
     );
 
@@ -429,7 +429,7 @@ export class PedidoRepository extends RepositorioBase {
       [...parametros, limite, offset],
     );
 
-    const total = await this.contar(`SELECT count(*) FROM pedidos ${onde}`, parametros);
+    const total = await this.contar(`SELECT count(*)::int AS total FROM pedidos ${onde}`, parametros);
 
     return { itens, total };
   }

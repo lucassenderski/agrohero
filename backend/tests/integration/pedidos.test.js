@@ -231,6 +231,19 @@ describe('visao do consumidor', () => {
     expect(resposta.body.dados).toHaveLength(1);
     expect(resposta.body.dados[0].itens).toHaveLength(1);
     expect(resposta.body.dados[0].status).toBe('PENDENTE');
+
+    /*
+     * REGRESSAO: `paginacao.total` precisa ser o total de LINHAS no
+     * banco, e nao zero.
+     *
+     * O repository usava `SELECT count(*) FROM pedidos` sem alias. O
+     * helper `contar` le `linha.total`, que nao existia - a coluna se
+     * chamava `count`. O resultado era sempre 0, e nenhum teste olhava
+     * esse campo: a lista vinha certa, entao a paginacao parecia
+     * funcionar. So apareceu na validacao manual do endpoint do
+     * agricultor. Este teste fecha a lacuna nos dois endpoints.
+     */
+    expect(resposta.body.paginacao.total).toBe(1);
   });
 
   test('nao lista o pedido de outro consumidor', async () => {
@@ -335,6 +348,10 @@ describe('visao do agricultor', () => {
     expect(doB.body.dados).toHaveLength(1);
     expect(String(doB.body.dados[0].produto_id)).toBe(String(idProdutoB));
     expect(pedido.pedido.id).toBeDefined();
+
+    /* Regressao do total: cada produtor ve exatamente 1 item. */
+    expect(doA.body.paginacao.total).toBe(1);
+    expect(doB.body.paginacao.total).toBe(1);
   });
 
   /*

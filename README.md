@@ -26,7 +26,7 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 11 | Checkout | ✅ |
 | 12 | Pedidos | ✅ |
 | 13 | Pagamentos (webhook e estorno) | ✅ |
-| 14 | Avaliações | próxima |
+| 14 | Avaliações | ✅ |
 | 15 | Frontend | pendente |
 | 16 | Integração frontend + backend | pendente |
 | 17 | Painel do consumidor | pendente |
@@ -190,6 +190,46 @@ Confira o resultado:
 
 Se `x-agrohero-signature` estiver errado ou ausente, a resposta é **403** e nada muda. O corpo do webhook não define o status: o servidor consulta o gateway e aplica a resposta dele.
 
+### 9. Testar as avaliações
+
+Quem pode avaliar? Três condições precisam valer ao mesmo tempo, e nenhuma delas vem do corpo da requisição:
+
+1. o produto está em um pedido do consumidor autenticado;
+2. o item está com status **ENTREGUE**;
+3. ainda não existe avaliação daquele produto naquele pedido.
+
+A checagem do status é **por item**, e não pelo pedido inteiro. Em um pedido com produtos de dois produtores, o produtor A pode ter entregue enquanto o B ainda está enviando — e a avaliação do item que chegou não deve esperar o outro.
+
+O corpo aceita `pedido_id`, `produto_id`, `nota` e `comentario`. Não aceita `consumidor_id` (vem do token) nem `agricultor_id` (vem do item do pedido): como a validação descarta campos não declarados, enviar esses valores não tem efeito.
+
+```bash
+# Avaliar um produto recebido
+curl -X POST http://localhost:3001/api/v1/avaliacoes \
+  -H "Authorization: Bearer $TOKEN_CLIENTE" \
+  -H 'Content-Type: application/json' \
+  -d '{"pedido_id":1,"produto_id":1,"nota":5,"comentario":"Tomate excelente"}'
+
+# Reputação pública do produto (sem token)
+curl http://localhost:3001/api/v1/avaliacoes/produto/1
+
+# O que este pedido ainda tem para avaliar
+curl http://localhost:3001/api/v1/avaliacoes/pendentes/1 \
+  -H "Authorization: Bearer $TOKEN_CLIENTE"
+```
+
+Respostas esperadas: **422** (`ITEM_NAO_ENTREGUE`) antes da entrega, **404** se o pedido não for do consumidor ou o produto não estiver nele, **409** ao tentar avaliar o mesmo item duas vezes.
+
+Para editar, envie apenas o que muda. `comentario: null` apaga o texto; omitir o campo mantém o atual:
+
+```bash
+curl -X PUT http://localhost:3001/api/v1/avaliacoes/1 \
+  -H "Authorization: Bearer $TOKEN_CLIENTE" \
+  -H 'Content-Type: application/json' \
+  -d '{"nota":3,"comentario":null}'
+```
+
+A média exposta em `/produtos/:id` (`media_avaliacoes`) e o perfil do produtor se ajustam na hora — inclusive quando uma avaliação é apagada.
+
 ---
 
 ## Estrutura do repositório
@@ -296,7 +336,7 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | GET | `/api/v1/agricultores` | 🔓 | Lista pública de produtores |
 | GET | `/api/v1/agricultores/:id` | 🔓 | Perfil público do produtor |
 | GET | `/api/v1/agricultores/:id/produtos` | 🔓 | Vitrine paginada do produtor |
-| GET | `/api/v1/agricultores/:id/avaliacoes` | 🔓 | Avaliações recebidas |
+| GET | `/api/v1/agricultores/:id/avaliacoes` | 🔓 | Avaliações recebidas (perfil público) |
 | GET | `/api/v1/categorias` | 🔓 | Lista categorias ativas |
 | GET | `/api/v1/categorias/:id` | 🔓 | Detalhe por id ou slug |
 | GET | `/api/v1/admin/categorias` | 🛡️ | Lista incluindo desativadas |
@@ -331,12 +371,17 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | GET | `/api/v1/admin/pedidos` | ⚙️ | Todos os pedidos |
 | PATCH | `/api/v1/admin/pedidos/:id/status` | ⚙️ | Avançar pedido inteiro |
 | POST | `/api/v1/webhooks/pagamento` | 🔓 | Notificação do gateway (assinatura HMAC) |
+| GET | `/api/v1/avaliacoes/produto/:produtoId` | 🔓 | Avaliações do produto (média e total) |
+| GET | `/api/v1/avaliacoes/agricultor/:agricultorId` | 🔓 | Avaliações do produtor (com distribuição de notas) |
+| POST | `/api/v1/avaliacoes` | 👤 | Avaliar produto recebido |
+| PUT/DELETE | `/api/v1/avaliacoes/:id` | 👤 | Editar / apagar a própria avaliação |
+| GET | `/api/v1/avaliacoes/minhas` | 👤 | Avaliações que o consumidor escreveu |
+| GET | `/api/v1/avaliacoes/pendentes/:pedidoId` | 👤 | Itens entregues e ainda não avaliados |
 
-**Planejado (Fases 14–19):**
+**Planejado (Fases 15–19):**
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| POST | `/avaliacoes` | 👤 | Avaliar produto comprado |
 | GET | `/admin/*` | 🛡️ | Métricas, usuários, moderação |
 
 Filtros de `/produtos`: `busca`, `categoria_id`, `agricultor_id`, `cidade`, `estado`, `preco_min`, `preco_max`, `disponivel`, `ordenar`, `pagina`, `limite`.

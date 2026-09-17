@@ -159,8 +159,30 @@ backend/
 | 1 | Estrutura, PostgreSQL local, `/health` | ✅ concluída |
 | 2 | Banco de dados (migrations e seeds) | ✅ concluída |
 | 3 | Backend base (validação, paginação, repositório, docs) | ✅ concluída |
-| 4 | Usuários | próxima |
-| 5–24 | Auth, produtos, carrinho, checkout, pedidos, painéis, segurança, testes, deploy | pendente |
+| 4 | Usuários | ✅ concluída |
+| 5 | Autenticação JWT | ✅ concluída |
+| 6 | Agricultores | ✅ concluída |
+| 7 | Categorias | ✅ concluída |
+| 8 | Produtos | ✅ concluída |
+| 9 | Busca e filtros | ✅ concluída |
+| 10 | Carrinho e endereços | ✅ concluída |
+| 11 | Checkout transacional | ✅ concluída |
+| 12 | Pedidos e transição de status | ✅ concluída |
+| 13 | Pagamentos (webhook e estorno) | ✅ concluída |
+| 14 | Avaliações | ✅ concluída |
+| 15–24 | Frontend, painéis, segurança, testes, deploy | pendente |
+
+Suíte de testes: **507 testes em 16 suítes**, todos passando (`npm test`).
+
+### Avaliações — a regra de autorização
+
+Uma avaliação só existe se o consumidor **comprou e recebeu** o produto, e ainda não o avaliou naquele pedido. As três condições são verificadas assim:
+
+1. `buscarItemEntregue(consumidorId, pedidoId, produtoId)` — os três filtros vão no `WHERE`, de modo que pedido de outro consumidor simplesmente não é encontrado;
+2. `pi.status = 'ENTREGUE'` — por **item**, não pelo pedido: em um pedido com produtos de dois produtores, o tomate que chegou não espera o morango que não chegou;
+3. constraint `avaliacoes_uma_por_produto_por_pedido` — a garantia real contra inflar a média. A consulta prévia existe só para dar mensagem clara; o `23505` é traduzido no mesmo `409`.
+
+`agricultor_id` nunca vem do corpo: é copiado de `pedido_itens`, senão daria para atribuir a nota a um produtor diferente do que vendeu. Editar e apagar são permitidos, restritos ao dono pelo `AND consumidor_id = $n` no SQL — e quem não é dono recebe **404**, não 403, para não confirmar que a avaliação existe.
 
 ## Documentação da API
 

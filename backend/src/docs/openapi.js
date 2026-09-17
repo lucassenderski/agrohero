@@ -200,6 +200,100 @@ const schemas = {
     },
   },
 
+  AvaliacaoEscrita: {
+    type: 'object',
+    description:
+      'Avaliacao criada ou atualizada pelo consumidor. `agricultor_id` e derivado do item do pedido, e nao do corpo da requisicao: aceita-lo do cliente permitiria atribuir a nota a um produtor diferente do que vendeu.',
+    properties: {
+      id: { type: 'integer', example: 10 },
+      pedido_id: { type: 'integer', example: 42 },
+      produto_id: { type: 'integer', example: 7 },
+      agricultor_id: { type: 'integer', example: 3 },
+      nota: { type: 'integer', minimum: 1, maximum: 5, example: 5 },
+      comentario: { type: 'string', nullable: true, example: 'Tomate excelente.' },
+      criado_em: { type: 'string', format: 'date-time' },
+      atualizado_em: { type: 'string', format: 'date-time' },
+    },
+  },
+
+  ResumoAvaliacoesProduto: {
+    type: 'object',
+    description: 'Media e total de avaliacoes de um produto, vindos da view produtos_com_avaliacao.',
+    properties: {
+      media: { type: 'number', example: 4.5 },
+      total: { type: 'integer', example: 12 },
+    },
+  },
+
+  ResumoAvaliacoesAgricultor: {
+    type: 'object',
+    description:
+      'Reputacao agregada do produtor. A `distribuicao` mostra quantas notas de cada valor existem - uma media 4,0 esconde a diferenca entre "todos deram 4" e "metade deu 5, metade deu 1".',
+    properties: {
+      media: { type: 'number', example: 4.25 },
+      total: { type: 'integer', example: 40 },
+      distribuicao: {
+        type: 'object',
+        example: { 1: 1, 2: 0, 3: 2, 4: 10, 5: 27 },
+        properties: {
+          1: { type: 'integer' },
+          2: { type: 'integer' },
+          3: { type: 'integer' },
+          4: { type: 'integer' },
+          5: { type: 'integer' },
+        },
+      },
+    },
+  },
+
+  ItemPendenteAvaliacao: {
+    type: 'object',
+    description:
+      'Item de pedido ja ENTREGUE e ainda nao avaliado. O status e checado por item, e nao pelo pedido: em um pedido multi-agricultor, o produtor A pode ter entregue antes do B.',
+    properties: {
+      item_id: { type: 'integer', example: 91 },
+      produto_id: { type: 'integer', example: 7 },
+      agricultor_id: { type: 'integer', example: 3 },
+      produto_nome: { type: 'string', example: 'Tomate Organico' },
+      imagem_url: { type: 'string', nullable: true },
+      unidade: { type: 'string', example: 'kg' },
+      nome_fazenda: { type: 'string', example: 'Fazenda A' },
+    },
+  },
+
+  CriarAvaliacaoEntrada: {
+    type: 'object',
+    required: ['pedido_id', 'produto_id', 'nota'],
+    description:
+      'O corpo NAO aceita `consumidor_id` (vem do token) nem `agricultor_id` (vem do item do pedido). Campos nao declarados sao descartados pela validacao.',
+    properties: {
+      pedido_id: { type: 'integer', example: 42 },
+      produto_id: { type: 'integer', example: 7 },
+      nota: { type: 'integer', minimum: 1, maximum: 5, example: 5 },
+      comentario: {
+        type: 'string',
+        nullable: true,
+        maxLength: 2000,
+        example: 'Chegou fresco e bem embalado.',
+      },
+    },
+  },
+
+  AtualizarAvaliacaoEntrada: {
+    type: 'object',
+    description:
+      'Atualizacao parcial: envie apenas o que muda. `pedido_id` e `produto_id` nao entram, porque identificam a compra que autorizou a avaliacao. Enviar `comentario: null` apaga o texto; omitir o campo mantem o atual.',
+    properties: {
+      nota: { type: 'integer', minimum: 1, maximum: 5, example: 4 },
+      comentario: {
+        type: 'string',
+        nullable: true,
+        maxLength: 2000,
+        description: '`null` apaga o comentario. Omitir o campo preserva o valor atual.',
+      },
+    },
+  },
+
   PerfilPublicoProdutor: {
     allOf: [
       { $ref: '#/components/schemas/ProdutorPublico' },
@@ -2911,6 +3005,325 @@ export const openapi = {
             },
           },
           403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+
+    '/api/v1/avaliacoes': {
+      post: {
+        tags: ['Avaliacoes'],
+        summary: 'Avalia um produto recebido',
+        description: [
+          'Cria a avaliacao de um produto que o consumidor COMPROU e RECEBEU.',
+          '',
+          'Tres condicoes precisam valer ao mesmo tempo:',
+          '',
+          '1. o produto esta em um pedido do consumidor autenticado;',
+          '2. o item esta com status ENTREGUE;',
+          '3. ainda nao existe avaliacao daquele produto naquele pedido.',
+          '',
+          'A checagem do status e por ITEM, e nao pelo pedido inteiro. Em um pedido com produtos de dois produtores, o produtor A pode ter entregue enquanto o B ainda esta enviando - e a avaliacao do item que chegou nao deve esperar o outro.',
+          '',
+          'O corpo nao aceita `consumidor_id` (vem do token) nem `agricultor_id` (vem do item do pedido). Como a validacao descarta campos nao declarados, enviar esses valores nao tem efeito.',
+        ].join('\n'),
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CriarAvaliacaoEntrada' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Avaliacao registrada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/AvaliacaoEscrita' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: {
+            description:
+              'O pedido nao existe, nao pertence ao consumidor, ou o produto nao esta nele. Os tres casos devolvem a mesma resposta para nao revelar a existencia de pedidos de terceiros.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+          409: {
+            description: 'Ja existe avaliacao deste produto neste pedido.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+          422: {
+            description:
+              'O item ainda nao foi entregue (codigo ITEM_NAO_ENTREGUE). O corpo traz o status atual do item.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/avaliacoes/{id}': {
+      put: {
+        tags: ['Avaliacoes'],
+        summary: 'Atualiza a propria avaliacao',
+        description: [
+          'Atualizacao parcial: envie apenas o que muda.',
+          '',
+          '`pedido_id` e `produto_id` nao entram no corpo - eles identificam a compra que autorizou a avaliacao, e muda-los seria reapontar a nota para outra compra.',
+          '',
+          '`comentario: null` apaga o texto; omitir o campo mantem o atual. A distincao existe porque "nao enviado" e "apagar" sao intencoes diferentes.',
+          '',
+          'Quem nao e dono recebe 404, e nao 403: um 403 confirmaria que a avaliacao existe e permitiria enumerar ids para descobrir quem avaliou o que.',
+        ].join('\n'),
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', example: 10 },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/AtualizarAvaliacaoEntrada' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Avaliacao atualizada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/AvaliacaoEscrita' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+      delete: {
+        tags: ['Avaliacoes'],
+        summary: 'Remove a propria avaliacao',
+        description:
+          'A remocao e definitiva e a media do produto e do produtor se ajusta na hora. Quem nao e dono recebe 404.',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', example: 10 },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Avaliacao removida.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: { id: { type: 'integer', example: 10 } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+
+    '/api/v1/avaliacoes/produto/{produtoId}': {
+      get: {
+        tags: ['Avaliacoes'],
+        summary: 'Avaliacoes de um produto (publico)',
+        description:
+          'Reputacao de um produto especifico. Rota publica: exigir login para ver a nota esconderia o dado que ajuda o consumidor a decidir. O resumo traz media e total vindos da view `produtos_com_avaliacao`.',
+        parameters: [
+          {
+            name: 'produtoId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', example: 7 },
+          },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Avaliacoes do produto com o resumo.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        resumo: { $ref: '#/components/schemas/ResumoAvaliacoesProduto' },
+                        avaliacoes: {
+                          type: 'array',
+                          items: { $ref: '#/components/schemas/AvaliacaoPublica' },
+                        },
+                      },
+                    },
+                    paginacao: { $ref: '#/components/schemas/Paginacao' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+
+    '/api/v1/avaliacoes/agricultor/{agricultorId}': {
+      get: {
+        tags: ['Avaliacoes'],
+        summary: 'Avaliacoes recebidas por um produtor (publico)',
+        description:
+          'Reputacao agregada do produtor, com a distribuicao de notas. Usa `agricultor_id` gravado no momento da avaliacao: se o produto for desativado depois, a nota continua ligada a quem de fato vendeu.',
+        parameters: [
+          {
+            name: 'agricultorId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', example: 3 },
+          },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Avaliacoes do produtor com o resumo.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        resumo: { $ref: '#/components/schemas/ResumoAvaliacoesAgricultor' },
+                        avaliacoes: {
+                          type: 'array',
+                          items: { $ref: '#/components/schemas/AvaliacaoPublica' },
+                        },
+                      },
+                    },
+                    paginacao: { $ref: '#/components/schemas/Paginacao' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+
+    '/api/v1/avaliacoes/minhas': {
+      get: {
+        tags: ['Avaliacoes'],
+        summary: 'Avaliacoes escritas pelo consumidor',
+        parameters: [
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Avaliacoes do consumidor autenticado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/AvaliacaoPublica' },
+                    },
+                    paginacao: { $ref: '#/components/schemas/Paginacao' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+
+    '/api/v1/avaliacoes/pendentes/{pedidoId}': {
+      get: {
+        tags: ['Avaliacoes'],
+        summary: 'O que este pedido tem para avaliar',
+        description:
+          'Itens do pedido ja ENTREGUE e ainda nao avaliados. Existe para o frontend nao ter que cruzar "meus pedidos" com "minhas avaliacoes". Pedido de outro consumidor devolve 404.',
+        parameters: [
+          {
+            name: 'pedidoId',
+            in: 'path',
+            required: true,
+            schema: { type: 'integer', example: 42 },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Itens pendentes de avaliacao.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        total: { type: 'integer', example: 2 },
+                        itens: {
+                          type: 'array',
+                          items: { $ref: '#/components/schemas/ItemPendenteAvaliacao' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
         },
       },
     },
