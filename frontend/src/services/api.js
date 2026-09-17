@@ -37,6 +37,14 @@ export class ErroApi extends Error {
     this.codigo = codigo;
     this.status = status;
     this.detalhes = detalhes;
+    /*
+     * `Error` guarda o texto em `.message`; a interface inteira le
+     * `falha.mensagem` (mesmo nome do campo no envelope de erro da API).
+     * Sem este alias, todo `falha.mensagem || 'mensagem padrao'` caia no
+     * fallback generico e o motivo real (ULTIMO_ENDERECO, por exemplo)
+     * nunca chegava ao usuario.
+     */
+    this.mensagem = mensagem;
   }
 }
 

@@ -1,3 +1,5 @@
+/* Cabecalho: marca, menu responsivo e contador do carrinho. */
+
 .header {
   position: sticky;
   top: 0;
@@ -13,6 +15,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--esp-4);
+  position: relative;
 }
 
 .header__marca {
@@ -33,12 +36,107 @@
   line-height: 1;
 }
 
-.header__aviso {
-  font-size: var(--texto-xs);
+.header__menu-botao {
+  background: none;
+  border: none;
+  font-size: var(--texto-xl);
+  line-height: 1;
+  color: var(--cor-primaria-700);
+  padding: var(--esp-2);
+}
+
+/*
+ * Mobile-first: o menu comeca fechado e vira um painel abaixo do
+ * cabecalho. Em telas grandes ele volta a ser uma linha unica.
+ */
+.header__navegacao {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--esp-1);
+  background-color: var(--cor-superficie);
+  border-bottom: 1px solid var(--cor-borda);
+  padding: var(--esp-3) var(--esp-4);
+  box-shadow: var(--sombra-md);
+}
+
+.header__navegacao--aberta {
+  display: flex;
+}
+
+.header__link {
+  padding: var(--esp-2) var(--esp-2);
+  border-radius: var(--raio-sm);
+  color: var(--cor-texto);
+  font-size: var(--texto-sm);
   font-weight: var(--peso-medio);
-  color: var(--cor-acento-600);
-  background-color: var(--cor-acento-100);
-  padding: var(--esp-1) var(--esp-3);
+}
+
+.header__link:hover {
+  background-color: var(--cor-primaria-50);
+  color: var(--cor-primaria-700);
+  text-decoration: none;
+}
+
+.header__link--carrinho {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-2);
+}
+
+.header__contador {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding-inline: var(--esp-1);
   border-radius: var(--raio-completo);
-  white-space: nowrap;
+  background-color: var(--cor-acento-500);
+  color: #fff;
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-forte);
+}
+
+.header__usuario {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--esp-1);
+  border-top: 1px solid var(--cor-borda-suave);
+  padding-top: var(--esp-2);
+  margin-top: var(--esp-1);
+}
+
+@media (min-width: 900px) {
+  .header__menu-botao {
+    display: none;
+  }
+
+  .header__navegacao {
+    display: flex;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--esp-1);
+    border-bottom: none;
+    padding: 0;
+    box-shadow: none;
+    flex: 1;
+    justify-content: flex-end;
+  }
+
+  .header__usuario {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--esp-2);
+    border-top: none;
+    padding-top: 0;
+    margin-top: 0;
+    margin-left: var(--esp-2);
+  }
 }

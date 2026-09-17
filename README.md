@@ -27,11 +27,11 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 12 | Pedidos | ✅ |
 | 13 | Pagamentos (webhook e estorno) | ✅ |
 | 14 | Avaliações | ✅ |
-| 15 | Frontend | pendente |
-| 16 | Integração frontend + backend | pendente |
-| 17 | Painel do consumidor | pendente |
-| 18 | Painel do agricultor | pendente |
-| 19 | Painel administrador | pendente |
+| 15 | Frontend (estrutura, rotas, cliente HTTP, contextos) | ✅ |
+| 16 | Integração frontend + backend | ✅ |
+| 17 | Painel do consumidor (endereços e avaliações) | ✅ |
+| 18 | Painel do agricultor | ✅ |
+| 19 | Painel administrador | ✅ |
 | 20 | Segurança | pendente |
 | 21 | Testes completos | pendente |
 | 22 | Documentação | pendente |
@@ -45,7 +45,7 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 **Backend:** Node.js 22, Express 4, PostgreSQL 16, `pg`, JWT, bcrypt, Zod, Helmet, Pino, Swagger  
 **Frontend:** React 18, Vite 5, React Router 6  
 **Banco:** PostgreSQL 16 (Docker Compose em desenvolvimento)  
-**Testes:** Jest + Supertest (integração real contra PostgreSQL)
+**Testes:** backend com Jest + Supertest e frontend com Vitest + Testing Library; ambos de integração, contra PostgreSQL e API reais (sem mocks)
 
 ---
 
@@ -135,6 +135,39 @@ cd backend && npm test
 ```
 
 Os testes **recriam o schema do zero** a cada execução, então não dependem de você ter rodado as migrations antes.
+
+### 6.1. Testes do frontend
+
+Os testes do frontend também são de integração: nenhum `fetch` é mockado, cada
+teste fala com a API de verdade. Por isso eles exigem um backend no ar.
+
+Use um servidor em modo `test`, apontando para o banco descartável
+(`agrohero_test`). Nesse modo o rate limit fica desligado — sem isso, uma suíte
+com vários cadastros estoura o limite de tentativas e falha por motivo errado:
+
+```bash
+cd backend
+NODE_ENV=test PORT=3002 \
+  DATABASE_URL_TEST=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test \
+  node src/server.js
+```
+
+Em outro terminal:
+
+```bash
+cd frontend
+npm test          # executa uma vez (vitest run)
+npm run test:watch
+```
+
+Os testes usam `http://localhost:3002/api/v1` por padrão. Para apontar para
+outro servidor, defina `VITE_API_URL` antes de rodar:
+
+```bash
+VITE_API_URL=http://localhost:3001/api/v1 npm test
+```
+
+---
 
 ### 7. Variáveis sensíveis
 

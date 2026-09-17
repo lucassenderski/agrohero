@@ -13,7 +13,7 @@ export default function Footer() {
           {ano} AgroHero - marketplace de produtos organicos direto do produtor.
         </p>
         <p className="footer__texto footer__texto--suave">
-          Projeto em desenvolvimento. Fase 1 de 24 concluida.
+          Projeto em desenvolvimento. Fases 1 a 19 concluidas.
         </p>
       </div>
     </footer>

@@ -221,3 +221,23 @@ Suíte de testes: 507 testes, 16 suítes, todos passando.
 **Estorno roda FORA da transação de cancelamento.** É chamada HTTP externa que pode levar segundos; dentro da transação, seguraria uma conexão do pool e uma linha travada durante toda a espera — alguns cancelamentos simultâneos esgotariam o pool. Consequência aceita: o estorno pode falhar depois do cancelamento confirmado. Nesse caso o cancelamento NÃO é desfeito (devolver dinheiro é obrigação, não condição) e a resposta traz `estorno_pendente: true` para a operação agir.
 
 **`env.PAYMENT_GATEWAY` é mutável em runtime, e os testes dependem disso.** O teste de falha de estorno troca o gateway por um inexistente dentro de um `try/finally`. `config/env.js` exporta o objeto `env`, e não valores congelados — o `finally` restaura.
+
+---
+
+## Frontend (FASES 15 a 19)
+
+**`ErroApi` precisa expor `.mensagem`, e não só `.message`.** Bug real encontrado pelos testes de integração: `ErroApi extends Error` guarda o texto em `.message`, mas TODA a interface lê `falha.mensagem || 'mensagem padrão'` (mesmo nome do campo no envelope de erro da API). O resultado era que nenhum motivo real chegava ao usuário — `ULTIMO_ENDERECO`, `ENDERECO_PRINCIPAL`, `ESTOQUE_INSUFICIENTE` caíam todos no texto genérico. A correção foi um alias `this.mensagem = mensagem` no construtor. Vale desconfiar de qualquer erro que sempre mostra a mesma mensagem.
+
+**Os testes do frontend são de integração de verdade, sem mock de `fetch`.** O padrão da casa é não mockar: o teste chama a API real e verifica o estado no banco depois. Isso pega bugs que um mock esconderia — o caso do `ErroApi` acima só apareceu porque a API respondeu 422 de verdade.
+
+**Teste de frontend exige backend em modo `test`, não o de desenvolvimento.** O login e o cadastro têm limitador estrito (10 por 15 min). Uma suíte que cria vários usuários estoura o limite e falha com `MUITAS_TENTATIVAS` — um falso negativo que parece bug de teste. Rodar um servidor com `NODE_ENV=test PORT=3002` e `DATABASE_URL_TEST` apontando para `agrohero_test`: nesse modo `env.ehTeste` desliga o rate limit.
+
+**Nunca chamar `/auth/login` no helper de teste quando `/auth/register` já devolve token.** O cadastro responde `{ usuario, token }`, então logar em seguida é um round-trip extra que consome o limitador sem necessidade.
+
+**Remover endereço tem duas regras, e as duas são 422.** `ULTIMO_ENDERECO` (o cliente precisa manter ao menos um para poder comprar) e `ENDERECO_PRINCIPAL` (não se remove o principal enquanto houver outro — é preciso promover outro antes). O teste de remoção com sucesso exige dois endereços e a promoção prévia.
+
+**O primeiro endereço cadastrado vira principal automaticamente.** O backend decide isso; o frontend nunca tenta adivinhar. Por isso `MeusEnderecos` recarrega a lista do servidor após cada escrita em vez de remendar o estado local.
+
+**Nome de dado de teste colidindo com rótulo da interface quebra o teste.** `nome_destinatario: 'Principal'` fazia `getByText('Principal')` achar tanto o nome quanto o selo "Principal" do endereço principal. Usar nomes que não aparecem como rótulo na tela.
+
+**`window.confirm` precisa de `vi.spyOn` no jsdom.** O diálogo não existe e a remoção fica sem autorização. Lembrar de `mockRestore()` no fim.

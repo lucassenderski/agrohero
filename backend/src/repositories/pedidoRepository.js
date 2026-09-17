@@ -20,6 +20,18 @@ const COLUNAS_PEDIDO = `
   endereco_entrega, criado_em, atualizado_em
 `;
 
+/*
+ * Mesmas colunas, porem qualificadas pelo alias `p` e com o nome do
+ * consumidor. A versao administrativa faz JOIN com `usuarios`, e sem o
+ * prefixo o banco recusaria `id`, `status` e `criado_em` por ambiguidade
+ * (as duas tabelas tem essas colunas).
+ */
+const COLUNAS_PEDIDO_ADMIN = `
+  p.id, p.consumidor_id, p.status, p.valor_produtos, p.valor_frete,
+  p.valor_total, p.endereco_entrega, p.criado_em, p.atualizado_em,
+  u.nome AS consumidor_nome
+`;
+
 export class PedidoRepository extends RepositorioBase {
   constructor() {
     super('pedidos');
@@ -412,24 +424,30 @@ export class PedidoRepository extends RepositorioBase {
 
     if (status) {
       parametros.push(status);
-      filtros.push(`status = $${parametros.length}`);
+      filtros.push(`p.status = $${parametros.length}`);
     }
 
     if (consumidorId) {
       parametros.push(consumidorId);
-      filtros.push(`consumidor_id = $${parametros.length}`);
+      filtros.push(`p.consumidor_id = $${parametros.length}`);
     }
 
     const onde = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
 
     const itens = await this.executar(
-      `SELECT ${COLUNAS_PEDIDO} FROM pedidos ${onde}
-        ORDER BY criado_em DESC
+      `SELECT ${COLUNAS_PEDIDO_ADMIN}
+         FROM pedidos p
+         JOIN usuarios u ON u.id = p.consumidor_id
+         ${onde}
+        ORDER BY p.criado_em DESC
         LIMIT $${parametros.length + 1} OFFSET $${parametros.length + 2}`,
       [...parametros, limite, offset],
     );
 
-    const total = await this.contar(`SELECT count(*)::int AS total FROM pedidos ${onde}`, parametros);
+    const total = await this.contar(
+      `SELECT count(*)::int AS total FROM pedidos p ${onde}`,
+      parametros,
+    );
 
     return { itens, total };
   }
