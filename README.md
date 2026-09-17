@@ -20,9 +20,9 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 5 | Autenticação JWT | ✅ |
 | 6 | Agricultores | ✅ |
 | 7 | Categorias | ✅ |
-| 8 | Produtos | próxima |
-| 9 | Busca e filtros | pendente |
-| 10 | Carrinho | pendente |
+| 8 | Produtos | ✅ |
+| 9 | Busca e filtros | ✅ |
+| 10 | Carrinho | próxima |
 | 11 | Checkout | pendente |
 | 12 | Pedidos | pendente |
 | 13 | Pagamentos | pendente |
@@ -249,14 +249,19 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | POST | `/api/v1/admin/categorias` | 🛡️ | Criar categoria |
 | GET/PUT/DELETE | `/api/v1/admin/categorias/:id` | 🛡️ | Ver, editar, desativar |
 | PATCH | `/api/v1/admin/categorias/:id/ativar` | 🛡️ | Reativar categoria |
+| GET | `/api/v1/produtos` | 🔓 | Catálogo: busca, filtros, ordenação, paginação |
+| GET | `/api/v1/produtos/:id` | 🔓 | Detalhe público do produto |
+| GET | `/api/v1/produtos/meus` | 🧑‍🌾 | Produtos do próprio agricultor (inclui inativos) |
+| POST | `/api/v1/produtos` | 🧑‍🌾 | Criar produto (dono vem do token) |
+| PUT/PATCH | `/api/v1/produtos/:id` | 🧑‍🌾 | Editar o próprio produto |
+| PATCH | `/api/v1/produtos/:id/disponibilidade` | 🧑‍🌾 | Tirar do ar / recolocar |
+| PATCH | `/api/v1/produtos/:id/estoque` | 🧑‍🌾 | Repor estoque (soma) |
+| DELETE | `/api/v1/produtos/:id` | 🧑‍🌾 | Desativar (exclusão lógica) |
 
-**Planejado (Fases 8–19):**
+**Planejado (Fases 10–19):**
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| GET | `/produtos` | 🔓 | Busca, filtros, ordenação e paginação |
-| GET | `/produtos/:id` | 🔓 | Detalhe do produto |
-| POST/PUT/PATCH/DELETE | `/produtos` | 🧑‍🌾 | Gerenciar os próprios produtos |
 | GET/POST/PUT/DELETE | `/carrinho` | 👤 | Carrinho persistente |
 | POST | `/checkout/preview` | 👤 | Recalcular valores sem gravar |
 | POST | `/checkout` | 👤 | Criar pedido (transação) |

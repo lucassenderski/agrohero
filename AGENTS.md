@@ -98,9 +98,9 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 
 ## Estado
 
-Fases 0–7 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias). Próxima: FASE 8 (produtos).
+Fases 0–9 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros). Próxima: FASE 10 (carrinho).
 Divergências encontradas no ambiente (ex.: container de banco caído) foram diagnosticadas e resolvidas, não contornadas.
-Suíte de testes: 230 testes, 10 suítes, todos passando.
+Suíte de testes: 292 testes, 11 suítes, todos passando.
 
 ## Armadilhas já encontradas (não repetir)
 
@@ -133,3 +133,13 @@ Suíte de testes: 230 testes, 10 suítes, todos passando.
 **A mesma regra de visibilidade precisa valer em toda leitura publica (FASE 6).** A listagem filtrava `agricultores.ativo` E `usuarios.ativo`, mas o detalhe checava so o primeiro - um produtor com login bloqueado sumia da lista e continuava acessivel por URL direta. Centralizado em `estaVisivelPublicamente`. Na FASE 7 o mesmo vale para produtos: `VISIVEL_PUBLICO` inclui `c.ativo = TRUE`, senao desativar uma categoria nao tiraria os produtos dela do marketplace. Toda consulta publica nova deve reusar a constante, nao reescrever a condicao.
 
 **Toda consulta com `count(*)` precisa dos MESMOS JOINs da consulta de itens.** Na FASE 7 o `count` da vitrine nao tinha o `JOIN categorias` que a condicao de visibilidade passou a exigir, e a query quebrava com "column c.ativo does not exist". Sempre que adicionar uma condicao que referencia um alias, conferir se a query de contagem tambem faz o JOIN correspondente.
+
+**O service precisa TRADUZIR os filtros da query (snake_case) para o repositorio (camelCase).** Na FASE 8 eu passei `...filtros` direto para `produtoRepository.listarPublicos`. Como o repositorio desestrutura `categoriaId`/`precoMin`, os nomes `categoria_id`/`preco_min` viravam `undefined`, a condicao SQL nao era adicionada e a API devolvia a lista inteira como se nenhum filtro tivesse sido pedido - sem erro, sem log, sem sintoma. Falha silenciosa: o teste que so checa "retorna 200" nao pega. Por isso existe um teste por filtro, cada um esperando um total DIFERENTE do total sem filtro. O `agricultorService` ja fazia esse mapeamento; ao criar um modulo novo, copiar o padrao em vez de passar o objeto direto.
+
+**Tipos de retorno do banco sao uma decisao do projeto, nao um detalhe.** `pool.js` registra um parser que converte NUMERIC em `Number` (comentado no arquivo). Escrevi `expect(preco).toBe('4.50')` supondo string e o teste falhou - o valor era `4.5`. Antes de escrever assercao sobre coluna NUMERIC/date, conferir o parser em `src/database/pool.js`.
+
+**Rota literal precisa ser declarada ANTES da rota com parametro.** `GET /produtos/meus` tem de vir antes de `GET /produtos/:id`, senao "meus" e capturado como id, falha na validacao de inteiro e devolve 400 - erro que parece bug de validacao quando e ordem de declaracao. Vale para qualquer rota literal sob um prefixo que tambem tem `/:id`.
+
+**Numero do placeholder `$n` e posicional e deve ser derivado do tamanho da lista de parametros.** Montar filtros dinamicos com `parametros.push(valor); filtros.push(\`col = $${parametros.length}\`)` mantem os dois sempre alinhados. Concatenar SQL com valores interpolados e o caminho para injecao; valores so entram via array de parametros.
+
+**Helper duplicado entre repositorios divergem.** `escaparTermoBusca` existia dentro de `agricultorRepository` e eu precisei dela em `produtoRepository`. Copiar teria criado duas versoes da mesma regra de escape. Extraida para `src/utils/sql.js` e importada nos dois.

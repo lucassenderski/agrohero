@@ -275,6 +275,96 @@ const schemas = {
     },
   },
 
+  ProdutoPublico: {
+    type: 'object',
+    description:
+      'Produto na vitrine. `media_avaliacoes` e `total_avaliacoes` vem da view produtos_com_avaliacao.',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      nome: { type: 'string', example: 'Tomate Italiano' },
+      descricao: { type: 'string', nullable: true },
+      preco: {
+        type: 'number',
+        description: 'Preco em reais. O servidor devolve como numero.',
+        example: 8.5,
+      },
+      estoque: { type: 'integer', example: 120 },
+      unidade: {
+        type: 'string',
+        description:
+          'Unidade de venda. Lista fechada: unidade, kg, g, litro, ml, duzia, bandeja, maço, caixa, pacote.',
+        example: 'kg',
+      },
+      imagem_url: { type: 'string', nullable: true },
+      ativo: { type: 'boolean' },
+      agricultor_id: { type: 'integer', example: 3 },
+      categoria_id: { type: 'integer', example: 2 },
+      categoria_nome: { type: 'string', example: 'Legumes' },
+      categoria_slug: { type: 'string', example: 'legumes' },
+      nome_fazenda: { type: 'string', example: 'Sitio Boa Vista' },
+      agricultor_cidade: { type: 'string', example: 'Campinas' },
+      agricultor_estado: { type: 'string', example: 'SP' },
+      media_avaliacoes: { type: 'number', example: 4.5 },
+      total_avaliacoes: { type: 'integer', example: 12 },
+      criado_em: { type: 'string', format: 'date-time' },
+      atualizado_em: { type: 'string', format: 'date-time' },
+    },
+  },
+
+  ProdutoEntrada: {
+    type: 'object',
+    required: ['nome', 'preco', 'categoria_id'],
+    description:
+      'O dono do produto vem do token; `agricultor_id` enviado no corpo e ignorado. `ativo` nao e aceito na criacao: produto novo nasce ativo e a disponibilidade tem rota propria.',
+    properties: {
+      nome: { type: 'string', minLength: 2, maxLength: 140, example: 'Tomate Italiano' },
+      descricao: { type: 'string', maxLength: 2000, nullable: true },
+      preco: {
+        type: 'number',
+        exclusiveMinimum: 0,
+        description: 'Maior que zero, no maximo 2 casas decimais.',
+        example: 8.5,
+      },
+      estoque: { type: 'integer', minimum: 0, default: 0, example: 120 },
+      unidade: { type: 'string', default: 'unidade', example: 'kg' },
+      categoria_id: { type: 'integer', example: 2 },
+      imagem_url: { type: 'string', nullable: true },
+    },
+  },
+
+  ProdutoAtualizacao: {
+    type: 'object',
+    description:
+      'Ao menos um campo deve ser enviado. Campos ausentes permanecem inalterados. `agricultor_id`, `ativo` e os atributos de imagem nao sao aceitos aqui.',
+    properties: {
+      nome: { type: 'string', minLength: 2, maxLength: 140 },
+      descricao: { type: 'string', maxLength: 2000, nullable: true },
+      preco: { type: 'number', exclusiveMinimum: 0 },
+      estoque: { type: 'integer', minimum: 0 },
+      unidade: { type: 'string' },
+      categoria_id: { type: 'integer' },
+      imagem_url: { type: 'string', nullable: true },
+    },
+  },
+
+  ProdutoDisponibilidade: {
+    type: 'object',
+    required: ['ativo'],
+    properties: {
+      ativo: { type: 'boolean', example: false },
+    },
+  },
+
+  ProdutoEstoque: {
+    type: 'object',
+    required: ['quantidade'],
+    description:
+      'A quantidade e SOMADA ao estoque atual, nunca substitui. Isso evita perder reposicoes simultaneas.',
+    properties: {
+      quantidade: { type: 'integer', minimum: 1, example: 50 },
+    },
+  },
+
   PerfilCompleto: {
     allOf: [
       { $ref: '#/components/schemas/UsuarioPublico' },
@@ -1161,6 +1251,366 @@ export const openapi = {
           404: { $ref: '#/components/responses/NaoEncontrado' },
           422: {
             description: 'Categoria ja esta ativa.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+    '/api/v1/produtos': {
+      get: {
+        tags: ['Produtos'],
+        summary: 'Catalogo publico com busca, filtros e paginacao',
+        description:
+          'Rota publica. Por padrao devolve apenas produtos DISPONIVEIS, o que significa: produto ativo, com estoque, de produtor ativo, com usuario ativo e de categoria ativa. Basta um desses estar desligado para o produto sair do resultado. A ordenacao e um enum fechado - nenhum texto do cliente chega ao ORDER BY.',
+        parameters: [
+          {
+            name: 'busca',
+            in: 'query',
+            description: 'Trecho do nome. Curingas do LIKE (% e _) sao tratados como texto literal.',
+            schema: { type: 'string', minLength: 2, maxLength: 100 },
+          },
+          { name: 'categoria_id', in: 'query', schema: { type: 'integer' } },
+          { name: 'agricultor_id', in: 'query', schema: { type: 'integer' } },
+          { name: 'cidade', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'estado',
+            in: 'query',
+            description: 'Sigla de duas letras; aceita minuscula e normaliza para maiuscula.',
+            schema: { type: 'string', minLength: 2, maxLength: 2, example: 'SP' },
+          },
+          { name: 'preco_min', in: 'query', schema: { type: 'number', minimum: 0 } },
+          { name: 'preco_max', in: 'query', schema: { type: 'number', minimum: 0 } },
+          {
+            name: 'disponivel',
+            in: 'query',
+            description: '`true` (padrao) so produtos com estoque; `false` inclui esgotados.',
+            schema: { type: 'string', enum: ['true', 'false'], default: 'true' },
+          },
+          {
+            name: 'ordenar',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['recentes', 'baratos', 'caros', 'nome', 'avaliacao'],
+              default: 'recentes',
+            },
+          },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+        ],
+        responses: {
+          200: {
+            description: 'Produtos encontrados.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { type: 'array', items: { $ref: '#/components/schemas/ProdutoPublico' } },
+                    paginacao: { $ref: '#/components/schemas/Paginacao' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+      post: {
+        tags: ['Produtos'],
+        summary: 'Cria produto',
+        description:
+          'Exige perfil de agricultor ativo. O dono vem do token: `agricultor_id` no corpo e ignorado. A categoria precisa existir e estar ativa.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ProdutoEntrada' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Produto criado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/ProdutoPublico' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          422: {
+            description: 'Conta de agricultor sem perfil de propriedade.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/produtos/meus': {
+      get: {
+        tags: ['Produtos'],
+        summary: 'Lista os produtos do proprio agricultor',
+        description:
+          'Inclui produtos inativos e esgotados, e nao depende de a categoria estar ativa - o dono precisa enxergar o que tirou do ar para poder reativar. Declarada antes de /produtos/{id} para "meus" nao ser lido como id.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'busca', in: 'query', schema: { type: 'string', minLength: 2, maxLength: 100 } },
+          { name: 'categoria_id', in: 'query', schema: { type: 'integer' } },
+          {
+            name: 'situacao',
+            in: 'query',
+            schema: { type: 'string', enum: ['todos', 'ativos', 'inativos', 'esgotados'], default: 'todos' },
+          },
+          {
+            name: 'ordenar',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['recentes', 'baratos', 'caros', 'nome', 'estoque'],
+              default: 'recentes',
+            },
+          },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+        ],
+        responses: {
+          200: {
+            description: 'Produtos do agricultor autenticado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { type: 'array', items: { $ref: '#/components/schemas/ProdutoPublico' } },
+                    paginacao: { $ref: '#/components/schemas/Paginacao' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+
+    '/api/v1/produtos/{id}': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      get: {
+        tags: ['Produtos'],
+        summary: 'Detalhe publico do produto',
+        description:
+          'Produto inativo, esgotado, de produtor suspenso ou de categoria desativada devolve 404 - sem distinguir de inexistente.',
+        responses: {
+          200: {
+            description: 'Produto encontrado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/ProdutoPublico' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+      put: {
+        tags: ['Produtos'],
+        summary: 'Atualiza produto (substituicao)',
+        description:
+          'Exige ser o agricultor DONO do produto. Produto de outro produtor devolve 403, e nao 404: quem chama ja e um agricultor autenticado tentando escrever, entao esconder o motivo nao protege nada e atrapalha o suporte.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ProdutoAtualizacao' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Produto atualizado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/ProdutoPublico' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+      patch: {
+        tags: ['Produtos'],
+        summary: 'Atualiza produto (parcial)',
+        description:
+          'Mesmo comportamento do PUT. Campos ausentes permanecem inalterados; um corpo vazio devolve 400.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ProdutoAtualizacao' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Produto atualizado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/ProdutoPublico' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+      delete: {
+        tags: ['Produtos'],
+        summary: 'Desativa produto (exclusao logica)',
+        description:
+          'Nao apaga o registro: `pedido_itens.produto_id` referencia o produto, e apagar perderia o historico de pedidos. Desativar o que ja esta desativado devolve 422, e nao sucesso silencioso.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Produto desativado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/ProdutoPublico' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          422: {
+            description: 'Produto ja esta desativado.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/produtos/{id}/disponibilidade': {
+      patch: {
+        tags: ['Produtos'],
+        summary: 'Tira do ar ou recoloca o produto',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ProdutoDisponibilidade' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Disponibilidade alterada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/ProdutoPublico' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          422: {
+            description: 'O produto ja esta no estado pedido.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/produtos/{id}/estoque': {
+      patch: {
+        tags: ['Produtos'],
+        summary: 'Repoe estoque (soma)',
+        description:
+          'A quantidade e somada ao estoque em uma unica operacao do banco (`estoque = estoque + $1`), para que duas reposicoes simultaneas nao se percam. Produto desativado nao aceita reposicao.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ProdutoEstoque' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Estoque atualizado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/ProdutoPublico' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          422: {
+            description: 'Produto desativado.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
         },

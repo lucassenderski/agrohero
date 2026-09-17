@@ -1,4 +1,5 @@
 import { RepositorioBase } from './RepositorioBase.js';
+import { escaparTermoBusca } from '../utils/sql.js';
 
 /*
  * Acesso a tabela `agricultores` (perfil publico do produtor).
@@ -66,18 +67,6 @@ const SELECT_PUBLICO = `
 
 /* Visivel no marketplace: perfil ativo e usuario ativo. */
 const VISIVEL_PUBLICO = 'a.ativo = TRUE AND u.ativo = TRUE';
-
-/*
- * Escapa os curingas do LIKE no termo de busca.
- *
- * Sem isso, procurar por "100%" casaria com qualquer nome, porque o `%`
- * digitado pelo usuario seria interpretado como curinga do proprio LIKE.
- * A barra invertida precisa vir primeiro, senao ela mesma seria escapada
- * duas vezes.
- */
-function escaparTermoBusca(termo) {
-  return termo.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
-}
 
 export class AgricultorRepository extends RepositorioBase {
   constructor() {

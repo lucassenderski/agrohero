@@ -3,6 +3,7 @@ import authRoutes from './authRoutes.js';
 import usuarioRoutes from './usuarioRoutes.js';
 import agricultorRoutes from './agricultorRoutes.js';
 import categoriaRoutes from './categoriaRoutes.js';
+import produtoRoutes from './produtoRoutes.js';
 import adminRoutes from './adminRoutes.js';
 
 /*
@@ -36,6 +37,12 @@ router.use('/agricultores', agricultorRoutes);
 router.use('/categorias', categoriaRoutes);
 
 /*
+ * Produtos: leitura publica e gestao pelo agricultor no mesmo modulo.
+ * A ordem de middleware de cada rota fica no proprio arquivo.
+ */
+router.use('/produtos', produtoRoutes);
+
+/*
  * Area administrativa. Todas as rotas daqui exigem administrador
  * (checkJwt + requireRole aplicados no proprio arquivo).
  */
@@ -46,7 +53,6 @@ router.use('/admin', adminRoutes);
  * aqui, sempre nesta ordem de middleware:
  *   autenticacao -> autorizacao -> validacao -> controller
  *
- *   router.use('/produtos', produtoRoutes);
  *   router.use('/carrinho', carrinhoRoutes);
  *   router.use('/checkout', checkoutRoutes);
  *   router.use('/pedidos', pedidoRoutes);
