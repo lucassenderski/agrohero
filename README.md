@@ -16,8 +16,8 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 1 | Estrutura, PostgreSQL local, `/health`, testes | ✅ |
 | 2 | Banco de dados (migrations e seeds) | ✅ |
 | 3 | Backend base (validação, paginação, repositório, docs) | ✅ |
-| 4 | Usuários | próxima |
-| 5 | Autenticação JWT | pendente |
+| 4 | Usuários | ✅ |
+| 5 | Autenticação JWT | ✅ |
 | 6 | Agricultores | pendente |
 | 7 | Categorias | pendente |
 | 8 | Produtos | pendente |
@@ -227,14 +227,23 @@ Prefixo `/api/v1`. Envelope único:
 
 Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricultor · 🛡️ administrador
 
+**Implementado até agora (Fases 1–5):**
+
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
 | GET | `/health` | 🔓 | Saúde da API e do banco |
 | GET | `/api/v1/docs` | 🔓 | Documentação interativa (Swagger UI) |
 | GET | `/api/v1/docs/openapi.json` | 🔓 | Especificação OpenAPI em JSON |
-| POST | `/auth/register` | 🔓 | Cadastro |
-| POST | `/auth/login` | 🔓 | Login (retorna JWT) |
-| GET | `/usuarios/profile` | 🔐 | Perfil do usuário logado |
+| POST | `/api/v1/auth/register` | 🔓 | Cadastro (cliente ou agricultor) |
+| POST | `/api/v1/auth/login` | 🔓 | Login (retorna JWT) |
+| GET | `/api/v1/usuarios/profile` | 🔐 | Perfil do usuário logado |
+| PUT | `/api/v1/usuarios/profile` | 🔐 | Editar o próprio perfil |
+| PUT | `/api/v1/usuarios/senha` | 🔐 | Trocar a própria senha |
+
+**Planejado (Fases 6–19):**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET | `/agricultores` | 🔓 | Lista de produtores |
 | GET | `/agricultores/:id` | 🔓 | Perfil público do produtor |
 | PUT | `/agricultores/meu-perfil` | 🧑‍🌾 | Editar o próprio perfil |

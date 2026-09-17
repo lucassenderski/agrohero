@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import authRoutes from './authRoutes.js';
+import usuarioRoutes from './usuarioRoutes.js';
 
 /*
  * Agregador das rotas de NEGOCIO, montado em /api/v1 pelo app.js.
@@ -14,12 +16,21 @@ import { Router } from 'express';
 const router = Router();
 
 /*
+ * Rotas publicas de autenticacao: cadastro e login.
+ */
+router.use('/auth', authRoutes);
+
+/*
+ * Rotas do usuario autenticado (perfil e senha). O checkJwt e aplicado
+ * dentro do proprio arquivo de rotas, sobre o router inteiro.
+ */
+router.use('/usuarios', usuarioRoutes);
+
+/*
  * Nas fases seguintes, cada modulo ganha seu arquivo de rotas e entra
  * aqui, sempre nesta ordem de middleware:
  *   autenticacao -> autorizacao -> validacao -> controller
  *
- *   router.use('/auth', authRoutes);
- *   router.use('/usuarios', usuarioRoutes);
  *   router.use('/agricultores', agricultorRoutes);
  *   router.use('/categorias', categoriaRoutes);
  *   router.use('/produtos', produtoRoutes);

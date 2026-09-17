@@ -34,6 +34,20 @@ const perfilAgricultorSchema = z.object({
   descricao: textoOpcional(2000, 'A descricao'),
   historia: textoOpcional(4000, 'A historia'),
   endereco: textoOpcional(200, 'O endereco'),
+  /*
+   * Cidade e estado da PROPRIEDADE.
+   *
+   * Sao distintos da localizacao do usuario (usuario pode morar em outra
+   * cidade). E a localizacao da propriedade que alimenta o filtro
+   * "produtores da minha regiao" no marketplace.
+   *
+   * Estes campos faltavam aqui e o Zod os descartava em silencio - o
+   * perfil do produtor era criado sem cidade e estado. O service tem um
+   * fallback para os dados do usuario, mas depender dele nao serve: o
+   * produtor pode legitimamente morar em outra cidade.
+   */
+  cidade: textoOpcional(80, 'A cidade'),
+  estado: estadoSchema.optional(),
   certificacoes: z
     .array(z.string().trim().min(2).max(120))
     .max(20, 'Informe no maximo 20 certificacoes.')

@@ -239,13 +239,73 @@ describe('Documentacao da API', () => {
 
   it('documenta apenas endpoints que existem de verdade', async () => {
     const resposta = await request(app).get('/api/v1/docs/openapi.json');
-    const caminhos = Object.keys(resposta.body.paths);
+    const caminhos = resposta.body.paths;
 
-    // Se alguem documentar rota inexistente, o "Try it out" devolveria
-    // 404 e a documentacao passaria a mentir.
-    for (const caminho of caminhos) {
-      const respostaRota = await request(app).get(caminho);
-      expect(respostaRota.status).not.toBe(404);
+    /*
+     * Verifica METODO + CAMINHO, nao apenas o caminho.
+     *
+     * A versao anterior fazia GET em todo caminho documentado. Isso
+     * funcionava enquanto so existia /health (GET). Quando entraram
+     * rotas POST (login) e PUT (trocar senha), o teste passou a falhar
+     * por um motivo falso: GET /api/v1/auth/login devolve 404 porque o
+     * METODO nao existe ali, e nao porque a rota seja ficticia.
+     *
+     * A intencao do teste e pegar rota documentada que nao existe (o
+     * "Try it out" devolveria 404 e a documentacao mentiria). Para isso,
+     * temos que reproduzir o mesmo metodo que o cliente usaria.
+     */
+    const metodos = ['get', 'post', 'put', 'patch', 'delete'];
+
+    for (const [caminho, operacoes] of Object.entries(caminhos)) {
+      for (const metodo of metodos) {
+        if (!operacoes[metodo]) continue;
+
+        const chamada = request(app)[metodo](caminho);
+
+        // Rota protegida sem token responde 401; rota com corpo
+        // obrigatorio responde 400. Ambos provam que a rota EXISTE - o
+        // que nao pode acontecer e 404.
+        if (metodo !== 'get') {
+          chamada.send({});
+        }
+
+        const respostaRota = await chamada;
+
+        // 404 significaria rota ficticia. 400/401/403 provam que existe.
+        expect(respostaRota.status).not.toBe(404);
+      }
+    }
+  });
+
+  it('toda operacao documentada tem summary e respostas declaradas', async () => {
+    // Documentacao pela metade (operacao sem descricao ou sem respostas)
+    // e pior que ausente: parece completa e nao e.
+    const resposta = await request(app).get('/api/v1/docs/openapi.json');
+    const metodos = ['get', 'post', 'put', 'patch', 'delete'];
+
+    for (const [caminho, operacoes] of Object.entries(resposta.body.paths)) {
+      for (const metodo of metodos) {
+        if (!operacoes[metodo]) continue;
+
+        expect(operacoes[metodo].summary).toBeTruthy();
+        expect(Object.keys(operacoes[metodo].responses).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('todas as referencias do OpenAPI resolvem para componentes existentes', async () => {
+    // Uma $ref quebrada faz o Swagger UI renderizar "Could not resolve
+    // reference" no lugar do schema, e o Try it out perde o exemplo.
+    const resposta = await request(app).get('/api/v1/docs/openapi.json');
+    const { schemas, responses } = resposta.body.components;
+
+    const referencias = [...JSON.stringify(resposta.body).matchAll(/"#\/components\/(schemas|responses)\/(\w+)"/g)];
+
+    expect(referencias.length).toBeGreaterThan(0);
+
+    for (const [, tipo, nome] of referencias) {
+      const alvo = tipo === 'schemas' ? schemas : responses;
+      expect(Object.keys(alvo)).toContain(nome);
     }
   });
 

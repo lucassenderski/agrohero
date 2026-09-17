@@ -49,6 +49,22 @@ export class UsuarioRepository extends RepositorioBase {
     );
   }
 
+  /*
+   * Busca por id INCLUINDO o hash da senha.
+   *
+   * Usado pela troca de senha, que precisa comparar a senha atual
+   * informada com o hash guardado. Antes esse fluxo buscava o usuario
+   * duas vezes (uma por id, so para descobrir o e-mail, e outra por
+   * e-mail, para obter o hash) - dois round-trips para um dado que esta
+   * na mesma linha da tabela.
+   */
+  async buscarPorIdComSenha(id) {
+    return this.buscarUm(
+      `SELECT ${COLUNAS_PUBLICAS}, senha_hash FROM usuarios WHERE id = $1`,
+      [id],
+    );
+  }
+
   /* Verifica se um e-mail ja esta cadastrado. */
   async emailEmUso(email, ignorarId = null) {
     const linha = await this.buscarUm(
