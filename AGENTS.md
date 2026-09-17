@@ -98,9 +98,9 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 
 ## Estado
 
-Fases 0–6 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores). Próxima: FASE 7 (categorias).
+Fases 0–7 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias). Próxima: FASE 8 (produtos).
 Divergências encontradas no ambiente (ex.: container de banco caído) foram diagnosticadas e resolvidas, não contornadas.
-Suíte de testes: 172 testes, 9 suítes, todos passando.
+Suíte de testes: 230 testes, 10 suítes, todos passando.
 
 ## Armadilhas já encontradas (não repetir)
 
@@ -120,4 +120,16 @@ Suíte de testes: 172 testes, 9 suítes, todos passando.
 
 **`CREATE OR REPLACE VIEW` não muda o tipo de uma coluna existente.** O PostgreSQL responde `cannot change data type of view column`. Quando o tipo muda, a migration precisa de `DROP VIEW` antes do `CREATE`.
 
-**A mesma regra de visibilidade precisa valer em toda leitura pública.** Na FASE 6, a listagem filtrava `agricultores.ativo` E `usuarios.ativo`, mas o detalhe checava só o primeiro — um produtor com login bloqueado sumia da lista e continuava acessível por URL direta. Centralizar em um helper único (`estaVisivelPublicamente`) foi o que corrigiu. Ao escrever uma consulta pública nova, usar o mesmo ponto de decisão.
+**`git checkout <arquivo>` nao restaura arquivo NOVO (untracked).** Ao testar "o teste pega este bug?" revertendo uma correcao, use `cp` para um backup antes e restaure com `cp`. O `git checkout` so funciona em arquivo ja versionado - e falha em silencio para untracked, deixando a modificacao de teste no codigo. Isso ja causou duas falhas na suite completa que nao apareciam na suite isolada.
+
+**Falha que aparece so na suite completa indica estado residual.** Se um teste passa isolado e falha no `npm test` inteiro, a causa quase sempre e uma modificacao de codigo que nao foi restaurada - nao interferencia entre suites.
+
+**Modificador `router.use()` no agregador erra o prefixo.** Montar um router que declara `'/'` e `'/:id'` em `/admin` registra `/admin/:id`, e nao `/admin/categorias/:id`. Quando o modulo tem nome proprio, o agregador deve montar em `/admin/<nome>` e o router do modulo usa caminhos relativos. Conferir as rotas registradas com um script que percorre `app._router.stack` antes de escrever os testes - o 404 que aparece depois e mais dificil de diagnosticar.
+
+**Rota publica e rota administrativa precisam de schemas de query DIFERENTES.** Como o Zod descarta campo nao declarado, usar por engano o schema do admin numa rota publica abre a brecha em silencio: o parametro passa a valer e o visitante ve dado que deveria estar oculto. O teste da Fase 7 que envia `?incluir_inativa=true` para a rota publica existe exatamente para travar isso.
+
+**`z.enum().optional().transform()` sem `.default()` devolve `false` para ausente.** `undefined === 'true'` e `false`, e o parametro perde o efeito para quem nao o envia. Quando o padrao importa (ex.: admin que deve ver inativas), declarar `.default('true')` ANTES do transform.
+
+**A mesma regra de visibilidade precisa valer em toda leitura publica (FASE 6).** A listagem filtrava `agricultores.ativo` E `usuarios.ativo`, mas o detalhe checava so o primeiro - um produtor com login bloqueado sumia da lista e continuava acessivel por URL direta. Centralizado em `estaVisivelPublicamente`. Na FASE 7 o mesmo vale para produtos: `VISIVEL_PUBLICO` inclui `c.ativo = TRUE`, senao desativar uma categoria nao tiraria os produtos dela do marketplace. Toda consulta publica nova deve reusar a constante, nao reescrever a condicao.
+
+**Toda consulta com `count(*)` precisa dos MESMOS JOINs da consulta de itens.** Na FASE 7 o `count` da vitrine nao tinha o `JOIN categorias` que a condicao de visibilidade passou a exigir, e a query quebrava com "column c.ativo does not exist". Sempre que adicionar uma condicao que referencia um alias, conferir se a query de contagem tambem faz o JOIN correspondente.

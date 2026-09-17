@@ -219,6 +219,62 @@ const schemas = {
     ],
   },
 
+  CategoriaPublica: {
+    type: 'object',
+    description:
+      'Categoria do catalogo. A contagem considera apenas produtos ativos: o filtro do marketplace nao deve sugerir produto disponivel quando todos estao desativados.',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      nome: { type: 'string', example: 'Frutas' },
+      slug: {
+        type: 'string',
+        description: 'Identificador para URL, derivado do nome. Formato: letras minusculas, numeros e hifen.',
+        example: 'frutas',
+      },
+      descricao: { type: 'string', nullable: true, example: 'Frutas frescas da estacao.' },
+      ativo: { type: 'boolean', example: true },
+      total_produtos: {
+        type: 'integer',
+        description: 'Produtos ativos nesta categoria.',
+        example: 12,
+      },
+      criado_em: { type: 'string', format: 'date-time' },
+      atualizado_em: { type: 'string', format: 'date-time' },
+    },
+  },
+
+  CategoriaEntrada: {
+    type: 'object',
+    required: ['nome'],
+    properties: {
+      nome: { type: 'string', minLength: 2, maxLength: 80, example: 'Grãos e Cereais' },
+      descricao: { type: 'string', maxLength: 1000, nullable: true },
+      ativo: { type: 'boolean', default: true },
+    },
+  },
+
+  CategoriaAtualizacao: {
+    type: 'object',
+    description:
+      'Todos os campos sao opcionais, mas ao menos um deve ser enviado. O slug NAO e aceito: ele e derivado do nome quando o nome muda, e mantido quando so a descricao muda - assim as URLs ja publicadas continuam validas.',
+    properties: {
+      nome: { type: 'string', minLength: 2, maxLength: 80, example: 'Frutas Frescas' },
+      descricao: { type: 'string', maxLength: 1000, nullable: true },
+      ativo: { type: 'boolean' },
+    },
+  },
+
+  CategoriaDesativada: {
+    type: 'object',
+    description:
+      'Resultado da desativacao. `produtos_afetados` informa quantos produtos ativos sairam do marketplace junto com a categoria, para o admin dimensionar o efeito.',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      ativo: { type: 'boolean', example: false },
+      produtos_afetados: { type: 'integer', example: 8 },
+    },
+  },
+
   PerfilCompleto: {
     allOf: [
       { $ref: '#/components/schemas/UsuarioPublico' },
@@ -823,6 +879,290 @@ export const openapi = {
           },
           400: { $ref: '#/components/responses/ErroValidacao' },
           404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+    '/api/v1/categorias': {
+      get: {
+        tags: ['Categorias'],
+        summary: 'Lista categorias ativas',
+        description:
+          'Rota publica. Devolve apenas categorias ativas - o parametro para incluir desativadas existe somente na rota administrativa, e aqui e descartado na validacao.',
+        parameters: [
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+        ],
+        responses: {
+          200: {
+            description: 'Lista de categorias ativas, ordenada por nome.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { type: 'array', items: { $ref: '#/components/schemas/CategoriaPublica' } },
+                    paginacao: { $ref: '#/components/schemas/Paginacao' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+
+    '/api/v1/categorias/{id}': {
+      get: {
+        tags: ['Categorias'],
+        summary: 'Detalhe da categoria por id ou slug',
+        description:
+          'Aceita id numerico ou slug na mesma rota: /categorias/3 e /categorias/frutas sao equivalentes. Categoria desativada devolve 404, sem distinguir de inexistente.',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'Id numerico ou slug (letras minusculas, numeros e hifen).',
+            schema: { type: 'string', example: 'frutas' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Categoria encontrada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/CategoriaPublica' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+
+    '/api/v1/admin/categorias': {
+      get: {
+        tags: ['Admin'],
+        summary: 'Lista categorias, incluindo desativadas',
+        description:
+          'O padrao de `incluir_inativas` e `true`: o admin abre esta rota principalmente para enxergar e reativar o que esta fora do ar.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'incluir_inativas',
+            in: 'query',
+            schema: { type: 'string', enum: ['true', 'false'], default: 'true' },
+          },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+        ],
+        responses: {
+          200: {
+            description: 'Lista de categorias.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { type: 'array', items: { $ref: '#/components/schemas/CategoriaPublica' } },
+                    paginacao: { $ref: '#/components/schemas/Paginacao' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+      post: {
+        tags: ['Admin'],
+        summary: 'Cria categoria',
+        description:
+          'O slug e derivado do nome pelo servidor; enviar `slug` no corpo nao tem efeito. Nome duplicado (ignorando maiuscula) devolve 409. Se o slug gerado colidir com um existente, um sufixo numerico e acrescentado.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CategoriaEntrada' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Categoria criada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/CategoriaPublica' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          409: { $ref: '#/components/responses/Conflito' },
+        },
+      },
+    },
+
+    '/api/v1/admin/categorias/{id}': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      get: {
+        tags: ['Admin'],
+        summary: 'Detalhe da categoria, incluindo desativada',
+        description:
+          'Diferente da rota publica, aqui `incluir_inativa` e aceito e o padrao e `true` - e o unico jeito de abrir uma categoria desativada para reativa-la.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'incluir_inativa',
+            in: 'query',
+            schema: { type: 'string', enum: ['true', 'false'], default: 'true' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Categoria encontrada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/CategoriaPublica' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+      put: {
+        tags: ['Admin'],
+        summary: 'Atualiza categoria',
+        description:
+          'O slug e regerado apenas quando o nome muda. Alterar so a descricao preserva a URL atual.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CategoriaAtualizacao' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Categoria atualizada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/CategoriaPublica' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          409: { $ref: '#/components/responses/Conflito' },
+        },
+      },
+      delete: {
+        tags: ['Admin'],
+        summary: 'Desativa categoria (exclusao logica)',
+        description:
+          'Nao apaga o registro. O motivo e duplo: `produtos.categoria_id` tem ON DELETE RESTRICT, entao apagar uma categoria em uso falharia; e mesmo sem produto, apagar perderia a referencia historica dos pedidos. Desativar tambem retira do marketplace os produtos dessa categoria.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Categoria desativada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/CategoriaDesativada' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          422: {
+            description: 'Categoria ja esta desativada.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/admin/categorias/{id}/ativar': {
+      patch: {
+        tags: ['Admin'],
+        summary: 'Reativa categoria',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        ],
+        responses: {
+          200: {
+            description: 'Categoria reativada.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'integer', example: 1 },
+                        ativo: { type: 'boolean', example: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          422: {
+            description: 'Categoria ja esta ativa.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
         },
       },
     },

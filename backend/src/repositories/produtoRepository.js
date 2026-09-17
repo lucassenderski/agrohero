@@ -43,15 +43,23 @@ const SELECT_PUBLICO = `
 /*
  * Condicao de visibilidade publica.
  *
- * Tres condicoes, e todas importam:
+ * QUATRO condicoes, e todas importam:
  *   - produto ativo: desativado nao aparece no marketplace;
  *   - produtor ativo: desativar um produtor esconde a vitrine dele;
- *   - usuario ativo: bloquear o login do produtor tambem esconde.
+ *   - usuario ativo: bloquear o login do produtor tambem esconde;
+ *   - categoria ativa: desativar uma categoria e a forma de tirar do ar
+ *     tudo que pertence a ela (ex.: retirar "Laticinios" do marketplace).
  *
- * Sem as duas ultimas, um produtor suspenso continuaria vendendo - o
- * bloqueio nao teria efeito pratico nenhum.
+ * Sem as tres ultimas, a suspensao correspondente nao teria efeito
+ * pratico: um produtor bloqueado continuaria vendendo, e uma categoria
+ * desativada continuaria mostrando produtos.
+ *
+ * Esta constante e o ponto unico da decisao. Toda leitura publica de
+ * produto usa exatamente esta string, para que a regra nao possa
+ * divergir entre a listagem e o detalhe.
  */
-const VISIVEL_PUBLICO = 'p.ativo = TRUE AND a.ativo = TRUE AND u.ativo = TRUE';
+const VISIVEL_PUBLICO =
+  'p.ativo = TRUE AND a.ativo = TRUE AND u.ativo = TRUE AND c.ativo = TRUE';
 
 export class ProdutoRepository extends RepositorioBase {
   constructor() {
@@ -101,6 +109,7 @@ export class ProdutoRepository extends RepositorioBase {
          FROM produtos p
          JOIN agricultores a ON a.id = p.agricultor_id
          JOIN usuarios u     ON u.id = a.usuario_id
+         JOIN categorias c   ON c.id = p.categoria_id
          ${onde}`,
       parametros,
     );

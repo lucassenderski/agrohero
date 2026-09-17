@@ -19,8 +19,8 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 4 | Usuários | ✅ |
 | 5 | Autenticação JWT | ✅ |
 | 6 | Agricultores | ✅ |
-| 7 | Categorias | próxima |
-| 8 | Produtos | pendente |
+| 7 | Categorias | ✅ |
+| 8 | Produtos | próxima |
 | 9 | Busca e filtros | pendente |
 | 10 | Carrinho | pendente |
 | 11 | Checkout | pendente |
@@ -243,13 +243,17 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | GET | `/api/v1/agricultores/:id` | 🔓 | Perfil público do produtor |
 | GET | `/api/v1/agricultores/:id/produtos` | 🔓 | Vitrine paginada do produtor |
 | GET | `/api/v1/agricultores/:id/avaliacoes` | 🔓 | Avaliações recebidas |
+| GET | `/api/v1/categorias` | 🔓 | Lista categorias ativas |
+| GET | `/api/v1/categorias/:id` | 🔓 | Detalhe por id ou slug |
+| GET | `/api/v1/admin/categorias` | 🛡️ | Lista incluindo desativadas |
+| POST | `/api/v1/admin/categorias` | 🛡️ | Criar categoria |
+| GET/PUT/DELETE | `/api/v1/admin/categorias/:id` | 🛡️ | Ver, editar, desativar |
+| PATCH | `/api/v1/admin/categorias/:id/ativar` | 🛡️ | Reativar categoria |
 
-**Planejado (Fases 7–19):**
+**Planejado (Fases 8–19):**
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| GET | `/categorias` | 🔓 | Lista de categorias |
-| POST/PUT/DELETE | `/categorias/:id` | 🛡️ | Gerenciar categorias |
 | GET | `/produtos` | 🔓 | Busca, filtros, ordenação e paginação |
 | GET | `/produtos/:id` | 🔓 | Detalhe do produto |
 | POST/PUT/PATCH/DELETE | `/produtos` | 🧑‍🌾 | Gerenciar os próprios produtos |
