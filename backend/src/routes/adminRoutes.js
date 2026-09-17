@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import adminCategoriaRoutes from './adminCategoriaRoutes.js';
+import adminPedidoRoutes from './adminPedidoRoutes.js';
 
 /*
  * Agregador da area administrativa, montado em /api/v1/admin.
@@ -19,5 +20,6 @@ import adminCategoriaRoutes from './adminCategoriaRoutes.js';
 const router = Router();
 
 router.use('/categorias', adminCategoriaRoutes);
+router.use('/pedidos', adminPedidoRoutes);
 
 export default router;

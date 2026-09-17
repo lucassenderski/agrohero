@@ -6,6 +6,7 @@ import categoriaRoutes from './categoriaRoutes.js';
 import carrinhoRoutes from './carrinhoRoutes.js';
 import checkoutRoutes from './checkoutRoutes.js';
 import enderecoRoutes from './enderecoRoutes.js';
+import pedidoRoutes from './pedidoRoutes.js';
 import produtoRoutes from './produtoRoutes.js';
 import adminRoutes from './adminRoutes.js';
 
@@ -60,6 +61,9 @@ router.use('/enderecos', enderecoRoutes);
  */
 router.use('/checkout', checkoutRoutes);
 
+/* Pedidos: consumidor, agricultor e admin, com visao por tipo. */
+router.use('/pedidos', pedidoRoutes);
+
 /*
  * Area administrativa. Todas as rotas daqui exigem administrador
  * (checkJwt + requireRole aplicados no proprio arquivo).
@@ -71,7 +75,6 @@ router.use('/admin', adminRoutes);
  * aqui, sempre nesta ordem de middleware:
  *   autenticacao -> autorizacao -> validacao -> controller
  *
- *   router.use('/pedidos', pedidoRoutes);
  *   router.use('/avaliacoes', avaliacaoRoutes);
  */
 

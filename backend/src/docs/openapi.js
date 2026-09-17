@@ -572,6 +572,92 @@ const schemas = {
     },
   },
 
+  ItemPedido: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      pedido_id: { type: 'integer', example: 1 },
+      produto_id: { type: 'integer', example: 1 },
+      agricultor_id: {
+        type: 'integer',
+        example: 1,
+        description:
+          'Dono deste item. E o que permite o produtor A mexer so nos itens dele num pedido multi-produtor.',
+      },
+      preco_unitario: {
+        type: 'number',
+        example: 8.5,
+        description: 'Snapshot do preco no momento da compra. Nao acompanha reajuste posterior.',
+      },
+      quantidade: { type: 'integer', example: 2 },
+      subtotal: { type: 'number', example: 17 },
+      status: {
+        type: 'string',
+        enum: ['PENDENTE', 'PROCESSANDO', 'ENVIADO', 'ENTREGUE', 'CANCELADO'],
+        example: 'PENDENTE',
+        description:
+          'O status e POR ITEM. `pedidos.status` e derivado destes por trigger no banco.',
+      },
+    },
+  },
+
+  PedidoDetalhado: {
+    allOf: [
+      { $ref: '#/components/schemas/Pedido' },
+      {
+        type: 'object',
+        properties: {
+          itens: { type: 'array', items: { $ref: '#/components/schemas/ItemPedido' } },
+          pagamentos: {
+            type: 'array',
+            description: 'Presente apenas nas visoes de consumidor e administrador.',
+            items: { type: 'object' },
+          },
+          visao: {
+            type: 'string',
+            enum: ['consumidor', 'agricultor', 'administrador'],
+            description:
+              'Qual recorte de dados esta sendo devolvido. O agricultor recebe apenas os itens dele.',
+          },
+          valor_dos_meus_itens: {
+            type: 'number',
+            example: 17,
+            description:
+              'Apenas na visao do agricultor. Na visao dele, `valor_produtos`, `valor_frete` e `valor_total` NAO sao enviados - esses numeros incluiriam as vendas dos outros produtores do mesmo pedido.',
+          },
+        },
+      },
+    ],
+  },
+
+  AlterarStatusItemEntrada: {
+    type: 'object',
+    required: ['status'],
+    description:
+      'O agricultor so aplica PROCESSANDO, ENVIADO ou ENTREGUE. CANCELADO nao entra: cancelar devolve estoque e tem rota propria. PENDENTE tambem nao, porque e o estado inicial e nao uma transicao.',
+    properties: {
+      status: {
+        type: 'string',
+        enum: ['PROCESSANDO', 'ENVIADO', 'ENTREGUE'],
+        example: 'PROCESSANDO',
+      },
+    },
+  },
+
+  AlterarStatusPedidoEntrada: {
+    type: 'object',
+    required: ['status'],
+    description:
+      'Uso administrativo. Aqui CANCELADO e valido: o service devolve o estoque dos itens cancelados. Itens cuja transicao nao for permitida sao ignorados, e nao forcados.',
+    properties: {
+      status: {
+        type: 'string',
+        enum: ['PENDENTE', 'PROCESSANDO', 'ENVIADO', 'ENTREGUE', 'CANCELADO'],
+        example: 'PROCESSANDO',
+      },
+    },
+  },
+
   PerfilCompleto: {
     allOf: [
       { $ref: '#/components/schemas/UsuarioPublico' },
@@ -792,6 +878,7 @@ export const openapi = {
     { name: 'Carrinho', description: 'Carrinho do consumidor autenticado (requer perfil cliente)' },
     { name: 'Enderecos', description: 'Enderecos de entrega do consumidor (dado pessoal)' },
     { name: 'Checkout', description: 'Previa e finalizacao da compra (transacao, calculo no servidor)' },
+    { name: 'Pedidos', description: 'Pedidos, itens e transicao de status (visao por tipo de usuario)' },
     { name: 'Admin', description: 'Gestao administrativa (requer perfil administrador)' },
   ],
 
@@ -2312,6 +2399,365 @@ export const openapi = {
           },
           422: {
             description: 'Carrinho vazio ou itens indisponiveis (preco/estoque mudaram).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+    '/api/v1/pedidos': {
+      get: {
+        tags: ['Pedidos'],
+        summary: 'Pedidos do consumidor autenticado',
+        description:
+          'Apenas `cliente`. O agricultor usa `/pedidos/agricultor`, que devolve ITENS e nao pedidos - ele quer saber o que precisa enviar.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'status',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['PENDENTE', 'PROCESSANDO', 'ENVIADO', 'ENTREGUE', 'CANCELADO'],
+            },
+          },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Pedidos do consumidor, com os itens de cada um.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { type: 'array', items: { $ref: '#/components/schemas/PedidoDetalhado' } },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+
+    '/api/v1/pedidos/agricultor': {
+      get: {
+        tags: ['Pedidos'],
+        summary: 'Itens de pedido do agricultor autenticado',
+        description:
+          'Devolve apenas os itens dos produtos deste agricultor. O filtro e `WHERE agricultor_id = <do token>`, entao nao ha como um produtor ver item alheio.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'status',
+            in: 'query',
+            description: 'Filtra pelo status do ITEM.',
+            schema: {
+              type: 'string',
+              enum: ['PENDENTE', 'PROCESSANDO', 'ENVIADO', 'ENTREGUE', 'CANCELADO'],
+            },
+          },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Itens do agricultor, com o pedido a que pertencem.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { type: 'array', items: { $ref: '#/components/schemas/ItemPedido' } },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+
+    '/api/v1/pedidos/{id}': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      get: {
+        tags: ['Pedidos'],
+        summary: 'Detalhe do pedido, com visao por tipo de usuario',
+        description:
+          'Os tres perfis acessam, mas cada um recebe um recorte: consumidor dono ve o pedido inteiro; agricultor ve apenas os itens dele e NAO recebe os valores totais do pedido; administrador ve tudo. Quem nao tem relacao com o pedido recebe 404 (e nao 403), para nao confirmar a existencia do id.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Pedido, no recorte do usuario autenticado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/PedidoDetalhado' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: {
+            description: 'Pedido inexistente ou sem relacao com este usuario.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/pedidos/{id}/cancelar': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      patch: {
+        tags: ['Pedidos'],
+        summary: 'Cancela o pedido (consumidor)',
+        description:
+          'Devolve o estoque dos itens cancelados na mesma transacao. Recusa se algum item ja saiu para entrega, se o pedido ja foi entregue ou se ja estava cancelado.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Pedido cancelado, com o estoque devolvido.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        pedido: { $ref: '#/components/schemas/Pedido' },
+                        itens_cancelados: { type: 'integer', example: 2 },
+                        estoque_devolvido: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              produto_id: { type: 'integer' },
+                              quantidade: { type: 'integer' },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          422: {
+            description:
+              'Pedido ja cancelado, ja entregue, nao cancelavel, ou cancelamento parcial nao suportado.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/pedidos/{id}/itens/{itemId}/status': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        { name: 'itemId', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      patch: {
+        tags: ['Pedidos'],
+        summary: 'Altera o status de um item (agricultor)',
+        description:
+          'O item e localizado por (itemId, agricultor do token). O `id` do pedido na URL e informativo: a autorizacao vem da POSSE do item. Item de outro produtor devolve 404, e nao 403. Transicoes validas: PENDENTE -> PROCESSANDO -> ENVIADO -> ENTREGUE. Pular etapa ou voltar atras devolve 422.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/AlterarStatusItemEntrada' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Status alterado, com o status do pedido ja sincronizado pelo trigger.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        item: { $ref: '#/components/schemas/ItemPedido' },
+                        pedido_status: { type: 'string', example: 'PROCESSANDO' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: {
+            description: 'Item inexistente ou de outro agricultor.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+          422: {
+            description: 'Transicao de status invalida.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/pedidos/{id}/itens/{itemId}': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        { name: 'itemId', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      delete: {
+        tags: ['Pedidos'],
+        summary: 'Cancela um item do proprio pedido (agricultor)',
+        description:
+          'Para quando o produtor percebe que nao tem o produto. O item NAO e apagado do banco (o historico do pedido precisa dele): o status vai para CANCELADO e o estoque volta. Afeta apenas o item deste agricultor, sem tocar nos itens dos outros produtores do mesmo pedido.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Item cancelado e estoque devolvido.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        item_id: { type: 'integer', example: 1 },
+                        pedido_status: { type: 'string', example: 'PROCESSANDO' },
+                        estoque_devolvido: { type: 'boolean', example: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: {
+            description: 'Item inexistente ou de outro agricultor.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+          422: {
+            description: 'Item ja saiu para entrega.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/admin/pedidos': {
+      get: {
+        tags: ['Admin'],
+        summary: 'Todos os pedidos (administrador)',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'status',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['PENDENTE', 'PROCESSANDO', 'ENVIADO', 'ENTREGUE', 'CANCELADO'],
+            },
+          },
+          { name: 'consumidorId', in: 'query', schema: { type: 'integer', minimum: 1 } },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Todos os pedidos.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { type: 'array', items: { $ref: '#/components/schemas/Pedido' } },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+
+    '/api/v1/admin/pedidos/{id}/status': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      patch: {
+        tags: ['Admin'],
+        summary: 'Avanca o pedido inteiro (administrador)',
+        description:
+          'Serve para destravar um pedido cujo produtor sumiu - sem isso, o pedido ficaria preso em PENDENTE para sempre. Itens cuja transicao nao for permitida sao ignorados. Com CANCELADO, o estoque dos itens cancelados e devolvido.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/AlterarStatusPedidoEntrada' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Pedido atualizado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        pedido: { $ref: '#/components/schemas/Pedido' },
+                        itens_afetados: { type: 'integer', example: 2 },
+                        itens: { type: 'array', items: { $ref: '#/components/schemas/ItemPedido' } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          422: {
+            description: 'Nenhum item pode ir para o status pedido.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
         },

@@ -98,9 +98,9 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 
 ## Estado
 
-Fases 0–11 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho, endereços, checkout transacional com frete e pagamento). Próxima: FASE 12 (pedidos e transição de status).
+Fases 0–12 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho, endereços, checkout transacional, pedidos com transição de status e regra multi-agricultor). Próxima: FASE 13 (webhook e estorno de pagamento).
 Divergências encontradas no ambiente (ex.: container de banco caído) foram diagnosticadas e resolvidas, não contornadas.
-Suíte de testes: 385 testes, 13 suítes, todos passando.
+Suíte de testes: 438 testes, 14 suítes, todos passando.
 
 ## Armadilhas já encontradas (não repetir)
 
@@ -171,5 +171,21 @@ Suíte de testes: 385 testes, 13 suítes, todos passando.
 **Gateway simulado deve ser deterministico, nao aleatorio.** O `gatewayFake` decide por regra (valor terminando em ,13 recusado, ,99 pendente, resto aprovado). Um resultado aleatorio tornaria os testes instaveis - o mesmo teste passaria e falharia sem mudanca de codigo.
 
 **Em producao, o gateway simulado e recusado explicitamente.** `paymentService` lanca erro se `PAYMENT_GATEWAY=fake` com NODE_ENV=production. Um erro de configuracao silencioso geraria pedidos entregues sem dinheiro nenhum ter entrado.
+
+**Status do pedido é derivado dos itens, por trigger no banco.** `pedidos.status` não é escrito pela aplicação. A função `sincronizar_status_pedido()` (migration 004) recalcula a cada mudança de item, com precedência: todos cancelados → CANCELADO; todos entregues → ENTREGUE; todos enviados/entregues → ENVIADO; algum em andamento → PROCESSANDO; senão PENDENTE. Escrever o status na aplicação criaria dois lugares decidindo o mesmo estado, e um deles esqueceria.
+
+**A visão do agricultor precisa REMOVER campos, não só acrescentar os dele.** Bug real: o `GET /pedidos/:id` devolvia `valor_total` (67.95) para o produtor A, revelando quanto o produtor B vendeu no mesmo pedido. A correção desestrutura o pedido e descarta `valor_produtos`, `valor_frete` e `valor_total`, devolvendo só `valor_dos_meus_itens`. Enviar os dois valores seria pior: o frontend teria o número errado disponível e bastaria uma tela usar o campo errado para vazar.
+
+**Ordem de rotas com `/:id` e caminho literal é armadilha silenciosa.** `GET /pedidos/agricultor` precisa ser declarada antes de `GET /pedidos/:id`, senão "agricultor" é interpretado como id e a resposta vira 400 de validação — um erro que parece bug de validação quando é ordem de declaração. Há teste de regressão para isso.
+
+**IDOR entre produtores devolve 404, não 403.** O item é localizado por `(itemId, agricultor_id do token)`. Quando o produtor A manda o id de um item do produtor B, o `WHERE` não acha linha e a resposta é 404. Um 403 confirmaria que aquele item existe e é de alguém.
+
+**Cancelamento precisa devolver estoque, e o teste precisa provar isso.** O estoque foi baixado no checkout; se o cancelamento não devolver, o produto some da vitrine para sempre. Os testes conferem o valor exato antes e depois (ex.: 93 → 100) e que cancelar duas vezes não devolve em dobro (o segundo cancelamento falha antes de tocar no estoque).
+
+**Cancelamento parcial não é suportado, e recusar é melhor que aceitar pela metade.** Pedido multi-produtor com um item já ENVIADO: cancelar só o resto deixaria o cliente com um pedido pela metade e o produtor com produto despachado sem cobrança clara. A API recusa com `CANCELAMENTO_PARCIAL_NAO_SUPORTADO`.
+
+**`pedido_itens.status` tem valor default e trigger `AFTER UPDATE OF status`.** Ao escrever teste que altera status por SQL direto, lembrar que o trigger roda e sincroniza `pedidos.status` — isso é o comportamento desejado, mas surpreende quem espera só a linha do item mudar.
+
+**Rate limit de login é 10 por 15 minutos e atrapalha validação manual em sequência.** Scripts que fazem vários logins seguidos recebem `MUITAS_TENTATIVAS` (429). Para validar manualmente, gerar o token direto com `gerarToken` a partir do banco em vez de logar a cada passo.
 
 **Frete precisa ser calculado antes do total, nunca depois.** O banco exige `valor_total = valor_produtos + valor_frete`, e o frete gratis depende do valor dos PRODUTOS. Calcular o frete a partir do total seria circular.

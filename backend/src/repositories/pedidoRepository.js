@@ -275,8 +275,8 @@ export class PedidoRepository extends RepositorioBase {
 
     const itens = await this.executar(
       `SELECT
-         pi.id, pi.pedido_id, pi.produto_id, pi.preco_unitario, pi.quantidade,
-         pi.subtotal, pi.status, pi.criado_em,
+         pi.id, pi.pedido_id, pi.produto_id, pi.agricultor_id, pi.preco_unitario,
+         pi.quantidade, pi.subtotal, pi.status, pi.criado_em,
          p.nome AS produto_nome, p.unidade, p.imagem_url,
          pe.status AS pedido_status,
          pe.criado_em AS pedido_criado_em,

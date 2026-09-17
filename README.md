@@ -24,8 +24,8 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 9 | Busca e filtros | ✅ |
 | 10 | Carrinho | ✅ |
 | 11 | Checkout | ✅ |
-| 12 | Pedidos | próxima |
-| 13 | Pagamentos | pendente |
+| 12 | Pedidos | ✅ |
+| 13 | Pagamentos | próxima |
 | 14 | Avaliações | pendente |
 | 15 | Frontend | pendente |
 | 16 | Integração frontend + backend | pendente |
@@ -268,15 +268,19 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | PATCH | `/api/v1/enderecos/:id/principal` | 👤 | Definir endereço principal |
 | POST | `/api/v1/checkout/preview` | 👤 | Resumo calculado sem gravar |
 | POST | `/api/v1/checkout` | 👤 | Finalizar compra (transação) |
+| GET | `/api/v1/pedidos` | 👤 | Pedidos do consumidor, com itens |
+| GET | `/api/v1/pedidos/agricultor` | 🧑‍🌾 | Itens do produtor (só os dele) |
+| GET | `/api/v1/pedidos/:id` | 🔐 | Detalhe — visão por tipo de usuário |
+| PATCH | `/api/v1/pedidos/:id/cancelar` | 👤 | Cancelar pedido (devolve estoque) |
+| PATCH | `/api/v1/pedidos/:id/itens/:itemId/status` | 🧑‍🌾 | Avançar status do próprio item |
+| DELETE | `/api/v1/pedidos/:id/itens/:itemId` | 🧑‍🌾 | Cancelar o próprio item |
+| GET | `/api/v1/admin/pedidos` | ⚙️ | Todos os pedidos |
+| PATCH | `/api/v1/admin/pedidos/:id/status` | ⚙️ | Avançar pedido inteiro |
 
-**Planejado (Fases 12–19):**
+**Planejado (Fases 13–19):**
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| GET | `/pedidos` | 👤 | Meus pedidos |
-| GET | `/pedidos/:id` | 🔐 | Detalhe do pedido |
-| PATCH | `/pedidos/:id/cancelar` | 👤 | Cancelar pedido |
-| PATCH | `/pedidos/:pedidoId/itens/:itemId/status` | 🧑‍🌾 | Alterar status dos próprios itens |
 | POST | `/pagamentos/:pedidoId` | 👤 | Iniciar pagamento |
 | POST | `/webhooks/pagamento` | 🔓 | Callback do gateway (assinatura verificada) |
 | POST | `/avaliacoes` | 👤 | Avaliar produto comprado |
