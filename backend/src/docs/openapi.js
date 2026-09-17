@@ -99,6 +99,126 @@ const schemas = {
     },
   },
 
+  /*
+   * Perfil publico do produtor, como aparece no marketplace.
+   *
+   * Repare no que este schema NAO tem: e-mail, telefone e endereco. Nao e
+   * omissao da documentacao - a rota realmente nao devolve esses campos.
+   * Documentar aqui o que a API nao expoe ajuda quem consome a entender
+   * que o contato nao esta disponivel por essa via.
+   */
+  ProdutorPublico: {
+    type: 'object',
+    description:
+      'Perfil publico do produtor. Nao inclui e-mail, telefone nem endereco completo: o requisito 13 define esses campos como privados, e a rota e publica.',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      nome_fazenda: { type: 'string', example: 'Sitio Boa Vista' },
+      descricao: { type: 'string', nullable: true, example: 'Produtos organicos sem agrotoxicos.' },
+      historia: { type: 'string', nullable: true, example: 'Terceira geracao da familia na mesma terra.' },
+      cidade: { type: 'string', nullable: true, example: 'Campinas' },
+      estado: { type: 'string', nullable: true, example: 'SP' },
+      certificacoes: { type: 'array', items: { type: 'string' }, example: ['Organico IBD'] },
+      imagem_url: { type: 'string', nullable: true },
+      ativo: { type: 'boolean', example: true },
+      criado_em: { type: 'string', format: 'date-time' },
+      atualizado_em: { type: 'string', format: 'date-time' },
+      responsavel_nome: { type: 'string', example: 'Carlos Produtor' },
+      media_avaliacoes: { type: 'number', example: 4.5 },
+      total_avaliacoes: { type: 'integer', example: 12 },
+    },
+  },
+
+  ReputacaoProdutor: {
+    type: 'object',
+    description: 'Resumo da reputacao do produtor, usado no cabecalho do perfil publico.',
+    properties: {
+      total: { type: 'integer', example: 12 },
+      media: { type: 'number', example: 4.5 },
+      distribuicao: {
+        type: 'object',
+        description: 'Quantidade de avaliacoes por nota. Permite desenhar o grafico do perfil.',
+        properties: {
+          1: { type: 'integer', example: 0 },
+          2: { type: 'integer', example: 1 },
+          3: { type: 'integer', example: 2 },
+          4: { type: 'integer', example: 4 },
+          5: { type: 'integer', example: 5 },
+        },
+      },
+    },
+  },
+
+  ResumoProdutos: {
+    type: 'object',
+    description: 'Contagem de produtos do produtor, por situacao.',
+    properties: {
+      produtos_total: { type: 'integer', example: 18 },
+      produtos_ativos: { type: 'integer', example: 15 },
+      produtos_esgotados: { type: 'integer', example: 2 },
+    },
+  },
+
+  ProdutoPublico: {
+    type: 'object',
+    description: 'Produto como aparece na vitrine publica.',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      nome: { type: 'string', example: 'Morango Organico' },
+      descricao: { type: 'string', nullable: true },
+      preco: { type: 'number', example: 25.9 },
+      estoque: { type: 'integer', example: 40 },
+      unidade: { type: 'string', example: 'unidade' },
+      imagem_url: { type: 'string', nullable: true },
+      ativo: { type: 'boolean', example: true },
+      agricultor_id: { type: 'integer', example: 1 },
+      categoria_id: { type: 'integer', example: 1 },
+      categoria_nome: { type: 'string', example: 'Frutas' },
+      categoria_slug: { type: 'string', example: 'frutas' },
+      nome_fazenda: { type: 'string', example: 'Sitio Boa Vista' },
+      agricultor_cidade: { type: 'string', nullable: true, example: 'Campinas' },
+      agricultor_estado: { type: 'string', nullable: true, example: 'SP' },
+      media_avaliacoes: { type: 'number', example: 4.5 },
+      total_avaliacoes: { type: 'integer', example: 12 },
+      criado_em: { type: 'string', format: 'date-time' },
+      atualizado_em: { type: 'string', format: 'date-time' },
+    },
+  },
+
+  AvaliacaoPublica: {
+    type: 'object',
+    description:
+      'Avaliacao exibida no perfil do produtor. Traz apenas o primeiro nome de quem avaliou: publicar o nome completo, ligado ao que a pessoa comprou, seria exposicao desnecessaria.',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      nota: { type: 'integer', minimum: 1, maximum: 5, example: 5 },
+      comentario: { type: 'string', nullable: true, example: 'Chegou fresco e bem embalado.' },
+      criado_em: { type: 'string', format: 'date-time' },
+      produto_id: { type: 'integer', example: 1 },
+      produto_nome: { type: 'string', example: 'Morango Organico' },
+      consumidor_primeiro_nome: { type: 'string', example: 'Maria' },
+    },
+  },
+
+  PerfilPublicoProdutor: {
+    allOf: [
+      { $ref: '#/components/schemas/ProdutorPublico' },
+      {
+        type: 'object',
+        properties: {
+          reputacao: { $ref: '#/components/schemas/ReputacaoProdutor' },
+          resumo: { $ref: '#/components/schemas/ResumoProdutos' },
+          produtos: {
+            type: 'array',
+            description: 'Primeiros produtos da vitrine. A lista completa fica em /agricultores/{id}/produtos.',
+            items: { $ref: '#/components/schemas/ProdutoPublico' },
+          },
+          produtos_paginacao: { $ref: '#/components/schemas/Paginacao' },
+        },
+      },
+    ],
+  },
+
   PerfilCompleto: {
     allOf: [
       { $ref: '#/components/schemas/UsuarioPublico' },
@@ -513,6 +633,196 @@ export const openapi = {
             description: 'Nova senha igual a atual.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
+        },
+      },
+    },
+    '/api/v1/agricultores': {
+      get: {
+        tags: ['Agricultores'],
+        summary: 'Lista publica de produtores',
+        description:
+          'Rota publica: nao exige autenticacao. Devolve apenas produtores visiveis (perfil ativo E usuario nao bloqueado). Nao expoe e-mail, telefone nem endereco do produtor.',
+        parameters: [
+          {
+            name: 'busca',
+            in: 'query',
+            description: 'Trecho do nome da fazenda. Os curingas do LIKE sao escapados.',
+            schema: { type: 'string', minLength: 2, maxLength: 100 },
+          },
+          {
+            name: 'cidade',
+            in: 'query',
+            schema: { type: 'string', minLength: 2, maxLength: 80 },
+          },
+          {
+            name: 'estado',
+            in: 'query',
+            description: 'Sigla da UF, duas letras.',
+            schema: { type: 'string', pattern: '^[A-Za-z]{2}$' },
+          },
+          {
+            name: 'ordenar',
+            in: 'query',
+            schema: { type: 'string', enum: ['nome', 'recentes', 'avaliacao'], default: 'nome' },
+          },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          {
+            name: 'limite',
+            in: 'query',
+            description: 'Maximo de 100. O servidor impoe o teto.',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Lista de produtores.',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    {
+                      type: 'object',
+                      properties: {
+                        sucesso: { type: 'boolean', example: true },
+                        dados: { type: 'array', items: { $ref: '#/components/schemas/ProdutorPublico' } },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+
+    '/api/v1/agricultores/{id}': {
+      get: {
+        tags: ['Agricultores'],
+        summary: 'Perfil publico do produtor',
+        description:
+          'Devolve o perfil, a reputacao, o resumo de produtos e os primeiros itens da vitrine em uma resposta so, para o frontend desenhar a pagina inteira sem tres requisicoes. Produtor inexistente ou suspenso devolve o MESMO 404, para nao confirmar a existencia de um perfil oculto.',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            description: 'ID do produtor (tabela agricultores, nao o id de usuario).',
+            schema: { type: 'integer', minimum: 1 },
+          },
+          {
+            name: 'categoria_id',
+            in: 'query',
+            description: 'Recorta a vitrine por categoria.',
+            schema: { type: 'integer', minimum: 1 },
+          },
+          {
+            name: 'ordenar',
+            in: 'query',
+            schema: { type: 'string', enum: ['recentes', 'baratos', 'caros', 'nome'] },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Perfil publico do produtor.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/PerfilPublicoProdutor' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: {
+            description: 'Produtor inexistente, suspenso ou com usuario bloqueado.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/agricultores/{id}/produtos': {
+      get: {
+        tags: ['Agricultores'],
+        summary: 'Vitrine paginada do produtor',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+          { name: 'categoria_id', in: 'query', schema: { type: 'integer', minimum: 1 } },
+          {
+            name: 'ordenar',
+            in: 'query',
+            schema: { type: 'string', enum: ['recentes', 'baratos', 'caros', 'nome'] },
+          },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Produtos publicos do produtor.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { type: 'array', items: { $ref: '#/components/schemas/ProdutoPublico' } },
+                    paginacao: { $ref: '#/components/schemas/Paginacao' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+
+    '/api/v1/agricultores/{id}/avaliacoes': {
+      get: {
+        tags: ['Agricultores'],
+        summary: 'Avaliacoes recebidas pelo produtor',
+        description:
+          'Devolve as avaliacoes com a reputacao agregada. Cada avaliacao traz apenas o primeiro nome de quem avaliou.',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+          { name: 'pagina', in: 'query', schema: { type: 'integer', minimum: 1 } },
+          { name: 'limite', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Avaliacoes e reputacao do produtor.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        avaliacoes: {
+                          type: 'array',
+                          items: { $ref: '#/components/schemas/AvaliacaoPublica' },
+                        },
+                        reputacao: { $ref: '#/components/schemas/ReputacaoProdutor' },
+                      },
+                    },
+                    paginacao: { $ref: '#/components/schemas/Paginacao' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
         },
       },
     },

@@ -18,8 +18,8 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 3 | Backend base (validação, paginação, repositório, docs) | ✅ |
 | 4 | Usuários | ✅ |
 | 5 | Autenticação JWT | ✅ |
-| 6 | Agricultores | pendente |
-| 7 | Categorias | pendente |
+| 6 | Agricultores | ✅ |
+| 7 | Categorias | próxima |
 | 8 | Produtos | pendente |
 | 9 | Busca e filtros | pendente |
 | 10 | Carrinho | pendente |
@@ -239,14 +239,15 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | GET | `/api/v1/usuarios/profile` | 🔐 | Perfil do usuário logado |
 | PUT | `/api/v1/usuarios/profile` | 🔐 | Editar o próprio perfil |
 | PUT | `/api/v1/usuarios/senha` | 🔐 | Trocar a própria senha |
+| GET | `/api/v1/agricultores` | 🔓 | Lista pública de produtores |
+| GET | `/api/v1/agricultores/:id` | 🔓 | Perfil público do produtor |
+| GET | `/api/v1/agricultores/:id/produtos` | 🔓 | Vitrine paginada do produtor |
+| GET | `/api/v1/agricultores/:id/avaliacoes` | 🔓 | Avaliações recebidas |
 
-**Planejado (Fases 6–19):**
+**Planejado (Fases 7–19):**
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| GET | `/agricultores` | 🔓 | Lista de produtores |
-| GET | `/agricultores/:id` | 🔓 | Perfil público do produtor |
-| PUT | `/agricultores/meu-perfil` | 🧑‍🌾 | Editar o próprio perfil |
 | GET | `/categorias` | 🔓 | Lista de categorias |
 | POST/PUT/DELETE | `/categorias/:id` | 🛡️ | Gerenciar categorias |
 | GET | `/produtos` | 🔓 | Busca, filtros, ordenação e paginação |

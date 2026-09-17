@@ -98,9 +98,9 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 
 ## Estado
 
-Fases 0–5 concluídas (estrutura, banco, backend base, usuários, autenticação JWT). Próxima: FASE 6 (agricultores).
+Fases 0–6 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores). Próxima: FASE 7 (categorias).
 Divergências encontradas no ambiente (ex.: container de banco caído) foram diagnosticadas e resolvidas, não contornadas.
-Suíte de testes: 140 testes, 8 suítes, todos passando.
+Suíte de testes: 172 testes, 9 suítes, todos passando.
 
 ## Armadilhas já encontradas (não repetir)
 
@@ -115,3 +115,9 @@ Suíte de testes: 140 testes, 8 suítes, todos passando.
 **`prepararSchema()` é obrigatório em suíte de integração nova.** Sem ele a suíte roda contra schema ausente ou desatualizado.
 
 **Docker/PostgreSQL caem quando o sandbox reinicia.** Subir com `sudo -n dockerd` e `docker compose up -d`; recriar `agrohero_test` se faltar.
+
+**O driver `pg` devolve `bigint` e `numeric` como string.** `count(*)` chega como `"0"`, não `0`, e `total === 0` é falso. Converter na view (`::int`, `::float`) resolve para todos os consumidores de uma vez. Vale para qualquer coluna agregada nova.
+
+**`CREATE OR REPLACE VIEW` não muda o tipo de uma coluna existente.** O PostgreSQL responde `cannot change data type of view column`. Quando o tipo muda, a migration precisa de `DROP VIEW` antes do `CREATE`.
+
+**A mesma regra de visibilidade precisa valer em toda leitura pública.** Na FASE 6, a listagem filtrava `agricultores.ativo` E `usuarios.ativo`, mas o detalhe checava só o primeiro — um produtor com login bloqueado sumia da lista e continuava acessível por URL direta. Centralizar em um helper único (`estaVisivelPublicamente`) foi o que corrigiu. Ao escrever uma consulta pública nova, usar o mesmo ponto de decisão.

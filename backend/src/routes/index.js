@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import authRoutes from './authRoutes.js';
 import usuarioRoutes from './usuarioRoutes.js';
+import agricultorRoutes from './agricultorRoutes.js';
 
 /*
  * Agregador das rotas de NEGOCIO, montado em /api/v1 pelo app.js.
@@ -27,11 +28,15 @@ router.use('/auth', authRoutes);
 router.use('/usuarios', usuarioRoutes);
 
 /*
+ * Rotas publicas do marketplace: vitrine do produtor.
+ */
+router.use('/agricultores', agricultorRoutes);
+
+/*
  * Nas fases seguintes, cada modulo ganha seu arquivo de rotas e entra
  * aqui, sempre nesta ordem de middleware:
  *   autenticacao -> autorizacao -> validacao -> controller
  *
- *   router.use('/agricultores', agricultorRoutes);
  *   router.use('/categorias', categoriaRoutes);
  *   router.use('/produtos', produtoRoutes);
  *   router.use('/carrinho', carrinhoRoutes);
