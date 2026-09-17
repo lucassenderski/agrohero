@@ -23,8 +23,8 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 8 | Produtos | ✅ |
 | 9 | Busca e filtros | ✅ |
 | 10 | Carrinho | ✅ |
-| 11 | Checkout | próxima |
-| 12 | Pedidos | pendente |
+| 11 | Checkout | ✅ |
+| 12 | Pedidos | próxima |
 | 13 | Pagamentos | pendente |
 | 14 | Avaliações | pendente |
 | 15 | Frontend | pendente |
@@ -263,13 +263,16 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | DELETE | `/api/v1/carrinho/itens/:produtoId` | 👤 | Remover item |
 | DELETE | `/api/v1/carrinho` | 👤 | Esvaziar carrinho |
 | GET | `/api/v1/carrinho/validacao` | 👤 | Revalidar preços e estoque |
+| GET/POST | `/api/v1/enderecos` | 👤 | Endereços de entrega (dado pessoal) |
+| GET/PUT/DELETE | `/api/v1/enderecos/:id` | 👤 | Detalhe, edição e remoção |
+| PATCH | `/api/v1/enderecos/:id/principal` | 👤 | Definir endereço principal |
+| POST | `/api/v1/checkout/preview` | 👤 | Resumo calculado sem gravar |
+| POST | `/api/v1/checkout` | 👤 | Finalizar compra (transação) |
 
-**Planejado (Fases 11–19):**
+**Planejado (Fases 12–19):**
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
-| POST | `/checkout/preview` | 👤 | Recalcular valores sem gravar |
-| POST | `/checkout` | 👤 | Criar pedido (transação) |
 | GET | `/pedidos` | 👤 | Meus pedidos |
 | GET | `/pedidos/:id` | 🔐 | Detalhe do pedido |
 | PATCH | `/pedidos/:id/cancelar` | 👤 | Cancelar pedido |

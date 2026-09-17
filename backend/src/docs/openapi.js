@@ -427,6 +427,151 @@ const schemas = {
     },
   },
 
+  Endereco: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      nome_destinatario: { type: 'string', example: 'Maria Souza' },
+      cep: { type: 'string', description: '8 digitos, sem hifen.', example: '13010100' },
+      rua: { type: 'string', example: 'Rua das Flores' },
+      numero: { type: 'string', example: '123' },
+      complemento: { type: 'string', nullable: true, example: 'Apto 45' },
+      bairro: { type: 'string', example: 'Centro' },
+      cidade: { type: 'string', example: 'Campinas' },
+      estado: { type: 'string', description: 'Sigla de 2 letras maiusculas.', example: 'SP' },
+      principal: { type: 'boolean', example: true },
+    },
+  },
+
+  EnderecoEntrada: {
+    type: 'object',
+    required: ['nome_destinatario', 'cep', 'rua', 'numero', 'bairro', 'cidade', 'estado'],
+    properties: {
+      nome_destinatario: { type: 'string', minLength: 3, maxLength: 120, example: 'Maria Souza' },
+      cep: { type: 'string', pattern: '^[0-9]{8}$', example: '13010100' },
+      rua: { type: 'string', minLength: 3, maxLength: 160, example: 'Rua das Flores' },
+      numero: { type: 'string', minLength: 1, maxLength: 20, example: '123' },
+      complemento: { type: 'string', maxLength: 80, nullable: true, example: 'Apto 45' },
+      bairro: { type: 'string', minLength: 2, maxLength: 80, example: 'Centro' },
+      cidade: { type: 'string', minLength: 2, maxLength: 80, example: 'Campinas' },
+      estado: { type: 'string', pattern: '^[A-Z]{2}$', example: 'SP' },
+    },
+  },
+
+  CheckoutPreviaEntrada: {
+    type: 'object',
+    description:
+      '`endereco_id` e opcional: sem ele o service usa o endereco principal (ou estima o frete base, sinalizando `endereco_definido: false`).',
+    properties: {
+      endereco_id: { type: 'integer', example: 1 },
+    },
+  },
+
+  CheckoutEntrada: {
+    type: 'object',
+    required: ['endereco_id', 'metodo_pagamento'],
+    description:
+      'NAO existe campo de valor, frete ou total. O Zod descarta qualquer um que for enviado, e o checkout recalcula tudo a partir de produtos.preco. E o que torna a manipulacao de preco impossivel, e nao apenas validada.',
+    properties: {
+      endereco_id: { type: 'integer', example: 1 },
+      metodo_pagamento: { type: 'string', enum: ['PIX', 'CARTAO', 'BOLETO'], example: 'PIX' },
+    },
+  },
+
+  CheckoutPrevia: {
+    type: 'object',
+    properties: {
+      itens: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            produto_id: { type: 'integer' },
+            nome: { type: 'string' },
+            quantidade: { type: 'integer' },
+            preco_unitario: { type: 'number', example: 8.5 },
+            subtotal: { type: 'number', example: 17 },
+            disponivel: { type: 'boolean' },
+            estoque_disponivel: { type: 'integer' },
+          },
+        },
+      },
+      endereco: { $ref: '#/components/schemas/Endereco' },
+      endereco_definido: {
+        type: 'boolean',
+        description: '`false` quando o cliente ainda nao tem endereco cadastrado.',
+      },
+      valor_produtos: { type: 'number', example: 17 },
+      valor_frete: { type: 'number', example: 4.95 },
+      frete_gratis: { type: 'boolean', example: false },
+      frete_motivo: { type: 'string', example: 'Entrega na mesma cidade do produtor (Campinas/SP).' },
+      valor_total: { type: 'number', example: 21.95 },
+      falta_para_frete_gratis: { type: 'number', example: 183 },
+      pode_finalizar: { type: 'boolean', example: true },
+      itens_indisponiveis: { type: 'integer', example: 0 },
+    },
+  },
+
+  CheckoutResultado: {
+    type: 'object',
+    description:
+      'O pedido existe independente do resultado do pagamento. Um pagamento recusado NAO desfaz o pedido: o cliente pode tentar pagar de novo.',
+    properties: {
+      pedido: { $ref: '#/components/schemas/Pedido' },
+      pagamento: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          metodo: { type: 'string', example: 'PIX' },
+          status: {
+            type: 'string',
+            enum: ['PENDENTE', 'APROVADO', 'RECUSADO', 'CANCELADO', 'REEMBOLSADO'],
+            example: 'APROVADO',
+          },
+          valor: { type: 'number', example: 27.45 },
+          mensagem: { type: 'string' },
+          dados_pagamento: {
+            type: 'object',
+            nullable: true,
+            description: 'Dados para o cliente concluir o PIX (QR Code). Nao inclui dado sensivel.',
+          },
+        },
+      },
+      frete: {
+        type: 'object',
+        properties: {
+          valor: { type: 'number', example: 4.95 },
+          gratis: { type: 'boolean' },
+          motivo: { type: 'string' },
+        },
+      },
+    },
+  },
+
+  Pedido: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      consumidor_id: { type: 'integer', example: 1 },
+      status: {
+        type: 'string',
+        enum: ['PENDENTE', 'PROCESSANDO', 'ENVIADO', 'ENTREGUE', 'CANCELADO'],
+        example: 'PENDENTE',
+        description:
+          'DERIVADO dos itens por trigger no banco. Em pedido multi-produtor, quem manda e o conjunto dos itens.',
+      },
+      valor_produtos: { type: 'number', example: 37 },
+      valor_frete: { type: 'number', example: 4.95 },
+      valor_total: { type: 'number', example: 41.95 },
+      endereco_entrega: {
+        type: 'object',
+        description:
+          'Snapshot do endereco no momento da compra. Nao e uma referencia: o cliente pode editar ou apagar o endereco depois, e o pedido precisa continuar mostrando para onde foi enviado.',
+      },
+      criado_em: { type: 'string', format: 'date-time' },
+    },
+  },
+
   PerfilCompleto: {
     allOf: [
       { $ref: '#/components/schemas/UsuarioPublico' },
@@ -645,6 +790,8 @@ export const openapi = {
     { name: 'Categorias', description: 'Consulta publica do catalogo de categorias' },
     { name: 'Produtos', description: 'Catalogo publico e gestao dos produtos pelo agricultor' },
     { name: 'Carrinho', description: 'Carrinho do consumidor autenticado (requer perfil cliente)' },
+    { name: 'Enderecos', description: 'Enderecos de entrega do consumidor (dado pessoal)' },
+    { name: 'Checkout', description: 'Previa e finalizacao da compra (transacao, calculo no servidor)' },
     { name: 'Admin', description: 'Gestao administrativa (requer perfil administrador)' },
   ],
 
@@ -1891,6 +2038,282 @@ export const openapi = {
           401: { $ref: '#/components/responses/NaoAutenticado' },
           403: { $ref: '#/components/responses/SemPermissao' },
           404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+    '/api/v1/enderecos': {
+      get: {
+        tags: ['Enderecos'],
+        summary: 'Enderecos do consumidor autenticado',
+        description: 'Principal primeiro. Nao existe `consumidor_id` em rota nenhuma.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Lista de enderecos.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { type: 'array', items: { $ref: '#/components/schemas/Endereco' } },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+      post: {
+        tags: ['Enderecos'],
+        summary: 'Cria endereco (o primeiro vira principal)',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/EnderecoEntrada' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Endereco criado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/Endereco' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          422: {
+            description: 'Limite de enderecos atingido.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/enderecos/{id}': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      get: {
+        tags: ['Enderecos'],
+        summary: 'Detalhe de um endereco',
+        description:
+          'Devolve 404 tambem quando o endereco e de outro consumidor - distinguir os casos confirmaria a existencia do id alheio.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Endereco.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/Endereco' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+      put: {
+        tags: ['Enderecos'],
+        summary: 'Atualiza o endereco inteiro',
+        description:
+          'Substituicao completa, e nao PATCH parcial: um endereco com rua nova e numero antigo seria um endereco errado.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/EnderecoEntrada' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Endereco atualizado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/Endereco' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+      delete: {
+        tags: ['Enderecos'],
+        summary: 'Remove um endereco',
+        description:
+          'Recusa remover o ultimo endereco (o cliente ficaria sem poder comprar) e recusa remover o principal enquanto houver outros.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Endereco removido.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: { removido: { type: 'boolean', example: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          422: {
+            description: 'Ultimo endereco ou endereco principal.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/enderecos/{id}/principal': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      patch: {
+        tags: ['Enderecos'],
+        summary: 'Define o endereco como principal',
+        description:
+          'Desmarcar o antigo e marcar o novo acontecem na mesma transacao: o indice parcial unico do banco impede dois principais.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Endereco principal definido.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/Endereco' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+
+    '/api/v1/checkout/preview': {
+      post: {
+        tags: ['Checkout'],
+        summary: 'Resumo calculado, sem gravar nada',
+        description:
+          'Usa o MESMO calculo do checkout real, entao a previa nao pode divergir do valor cobrado. Pode ser chamada a cada troca de endereco.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CheckoutPreviaEntrada' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Resumo da compra.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/CheckoutPrevia' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+          422: {
+            description: 'Carrinho vazio.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+    },
+
+    '/api/v1/checkout': {
+      post: {
+        tags: ['Checkout'],
+        summary: 'Finaliza a compra',
+        description:
+          'Recalcula todos os valores a partir do banco, reserva o estoque de forma condicional e cria pedido, itens e pagamento numa transacao unica. Qualquer falha dispara ROLLBACK e nada e gravado.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CheckoutEntrada' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Pedido criado.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: { $ref: '#/components/schemas/CheckoutResultado' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: {
+            description: 'Endereco inexistente ou de outro consumidor.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+          409: {
+            description: 'Estoque insuficiente detectado na baixa condicional.',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+          422: {
+            description: 'Carrinho vazio ou itens indisponiveis (preco/estoque mudaram).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
         },
       },
     },

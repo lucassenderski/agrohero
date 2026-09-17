@@ -4,6 +4,8 @@ import usuarioRoutes from './usuarioRoutes.js';
 import agricultorRoutes from './agricultorRoutes.js';
 import categoriaRoutes from './categoriaRoutes.js';
 import carrinhoRoutes from './carrinhoRoutes.js';
+import checkoutRoutes from './checkoutRoutes.js';
+import enderecoRoutes from './enderecoRoutes.js';
 import produtoRoutes from './produtoRoutes.js';
 import adminRoutes from './adminRoutes.js';
 
@@ -49,6 +51,15 @@ router.use('/produtos', produtoRoutes);
  */
 router.use('/carrinho', carrinhoRoutes);
 
+/* Enderecos de entrega: dado pessoal do consumidor autenticado. */
+router.use('/enderecos', enderecoRoutes);
+
+/*
+ * Checkout: consome o carrinho do token e cria o pedido numa transacao.
+ * Nenhum valor vem do cliente - tudo e recalculado no servidor.
+ */
+router.use('/checkout', checkoutRoutes);
+
 /*
  * Area administrativa. Todas as rotas daqui exigem administrador
  * (checkJwt + requireRole aplicados no proprio arquivo).
@@ -60,7 +71,6 @@ router.use('/admin', adminRoutes);
  * aqui, sempre nesta ordem de middleware:
  *   autenticacao -> autorizacao -> validacao -> controller
  *
- *   router.use('/checkout', checkoutRoutes);
  *   router.use('/pedidos', pedidoRoutes);
  *   router.use('/avaliacoes', avaliacaoRoutes);
  */

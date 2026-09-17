@@ -98,9 +98,9 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 
 ## Estado
 
-Fases 0–10 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho). Próxima: FASE 11 (checkout transacional).
+Fases 0–11 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho, endereços, checkout transacional com frete e pagamento). Próxima: FASE 12 (pedidos e transição de status).
 Divergências encontradas no ambiente (ex.: container de banco caído) foram diagnosticadas e resolvidas, não contornadas.
-Suíte de testes: 335 testes, 12 suítes, todos passando.
+Suíte de testes: 385 testes, 13 suítes, todos passando.
 
 ## Armadilhas já encontradas (não repetir)
 
@@ -155,3 +155,21 @@ Suíte de testes: 335 testes, 12 suítes, todos passando.
 **Arredondar dinheiro em ponto flutuante.** `0.1 * 3` em JavaScript da `0.30000000000000004`. Todo subtotal e total passa por `Number(x.toFixed(2))` antes de sair. Sem isso, o total do carrinho aparece com cauda de float na tela.
 
 **BIGINT do pg chega como string; NUMERIC chega como Number (parser do projeto).** Teste do carrinho falhou esperando `1` e recebendo `"1"` em `produto_id`. Antes de assertar, conferir o tipo da coluna: id e BIGINT (string), preco e NUMERIC (Number, por causa do parser em `pool.js`).
+
+**Preco do cliente nao existe no schema; no checkout isso vale para o pedido inteiro.** O corpo do `POST /checkout` aceita so `endereco_id` e `metodo_pagamento`. Nao ha `valor_total`, `valor_frete` nem `preco`. Se houvesse, o cliente mandaria 0.01 e a API gravaria o pedido por 0.01. A defesa e a ausencia do campo, nao a validacao dele.
+
+**Adicionar ao carrinho valida estoque; isso muda como se escreve teste de checkout.** Varios testes falharam por baixar o estoque ANTES de montar o carrinho - a propria adicao recusava. O cenario que se quer testar e "o carrinho foi montado quando havia estoque, e o estoque caiu depois". Ordem: encher o carrinho, depois ajustar o estoque por SQL.
+
+**A revalidacao dentro da transacao ganha da baixa condicional.** Um checkout com estoque insuficiente devolve 422 ITENS_INDISPONIVEIS, e nao 409 ESTOQUE_INSUFICIENTE: a leitura dentro da transacao ja ve o estoque zerado. O 409 fica para a corrida entre a leitura e o `UPDATE ... WHERE estoque >= $2`. Ao testar, conferir qual caminho o cenario realmente exercita.
+
+**Transacao testada so por "nada foi gravado" nao esta testada.** Desligar BEGIN/ROLLBACK nao fez os testes de atomicidade falharem, porque a revalidacao barrava tudo antes da primeira escrita. Foi preciso um teste que baixa o estoque de verdade e lanca erro depois, exercitando `emTransacao` diretamente. Vale desconfiar de cobertura de rollback que passa sem nunca ter escrito nada.
+
+**Falha de gateway de pagamento nao desfaz o pedido.** O pedido, os itens e a baixa de estoque acontecem na transacao; a chamada ao gateway acontece DEPOIS do commit. Segurar uma transacao aberta esperando rede de terceiro prenderia locks de estoque e conexao do pool. Se o gateway falhar, o pedido fica com pagamento PENDENTE e o cliente tenta de novo.
+
+**Identificador do gateway precisa ser GRAVADO, nao so devolvido.** Bug real encontrado na validacao manual: o checkout devolvia o id da transacao na resposta, mas o UPDATE so persistia status e resumo. Sem ele, `buscarPagamentoPorIdentificador` nao acharia nada e um webhook de PIX nao teria como reconciliar - o pedido ficaria pendente para sempre. Vale conferir, campo a campo, se todo dado devolvido na resposta tambem foi persistido.
+
+**Gateway simulado deve ser deterministico, nao aleatorio.** O `gatewayFake` decide por regra (valor terminando em ,13 recusado, ,99 pendente, resto aprovado). Um resultado aleatorio tornaria os testes instaveis - o mesmo teste passaria e falharia sem mudanca de codigo.
+
+**Em producao, o gateway simulado e recusado explicitamente.** `paymentService` lanca erro se `PAYMENT_GATEWAY=fake` com NODE_ENV=production. Um erro de configuracao silencioso geraria pedidos entregues sem dinheiro nenhum ter entrado.
+
+**Frete precisa ser calculado antes do total, nunca depois.** O banco exige `valor_total = valor_produtos + valor_frete`, e o frete gratis depende do valor dos PRODUTOS. Calcular o frete a partir do total seria circular.
