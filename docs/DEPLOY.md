@@ -102,6 +102,7 @@ Rode o comando **duas vezes**: um valor para `JWT_SECRET`, outro para `PAYMENT_W
 | `JWT_SECRET` | valor aleatório gerado acima |
 | `PAYMENT_WEBHOOK_SECRET` | outro valor aleatório, diferente do anterior |
 | `CORS_ORIGINS` | a URL do frontend no Render, com `https://` |
+| `RATE_LIMIT_MAX_LOGIN` | opcional; padrão 10. Suba para ~30 se for demonstrar o sistema |
 
 As três regras que o backend verifica em produção, e que fazem o processo morrer na subida se violadas:
 
@@ -143,13 +144,15 @@ npm run migrate && npm run seed && npm start
 
 ```
   ADMINISTRADOR CRIADO
-  E-mail: admin@agrohero.com.br
+  E-mail: admin@agrohero.local
   Senha : xxxxxxxxxxxxxxxxxxxx
   Anote a senha agora. Ela nao e exibida novamente.
   Troque a senha no primeiro login.
 ```
 
 5. **Volte o Start Command** para `npm run migrate && npm start`.
+
+> **O seed também passa pela guarda de produção.** Se `JWT_SECRET`, `PAYMENT_WEBHOOK_SECRET` ou `CORS_ORIGINS` estiverem com valor de exemplo, o seed encerra com código 1 e **não cria nada** — a mesma guarda do `src/config/verificacaoProducao.js` roda no seed, porque ele importa o `env.js`. Nesse caso ele imprime a lista de problemas e sai; corrija as variáveis antes de tentar de novo. Como o `&&` no comando de start propaga a falha, o deploy aparece como falho, o que é o comportamento desejado: melhor falhar do que subir sem administrador.
 
 O passo 5 não é opcional: deixar o seed no start faz ele rodar em todo deploy. Como é idempotente não haveria dano, mas também não haveria motivo — e um restart acidental do serviço não deve mexer no banco sem necessidade.
 
@@ -221,6 +224,17 @@ O `VITE_API_URL` foi lido em tempo de build, não de execução — o navegador 
 **A primeira requisição demora cerca de um minuto.**
 
 É a hibernação do plano gratuito do Render: o serviço dorme depois de 15 minutos sem uso e leva cerca de um minuto para acordar na requisição seguinte. Não é erro. Para a apresentação, abra o site alguns minutos antes, para o serviço já estar acordado.
+
+**Depois de vários cadastros e logins seguidos, aparece "Muitas tentativas de login".**
+
+O limite é de **10 requisições de login/cadastro por IP a cada 15 minutos** (`RATE_LIMIT_MAX_LOGIN`). O `trust proxy` já está configurado, então cada visitante é contado pelo IP real e não pelo IP do proxy do Render — mas **todos os acessos de uma mesma rede saem pelo mesmo IP**.
+
+Isso morde justamente na hora da demonstração: você cria duas ou três contas enquanto ensaia, e na apresentação o limite já estourou. Duas saídas:
+
+- ajustar `RATE_LIMIT_MAX_LOGIN` nas variáveis de ambiente do Render (ex.: `30`) e reimplantar;
+- ou aguardar os 15 minutos, que é o que a mensagem pede.
+
+O limite geral da API é bem mais folgado: 300 requisições por 15 minutos por IP (`RATE_LIMIT_MAX_REQUISICOES`). Ele é o que protege a API de varredura, e não vale afrouxar sem motivo.
 
 **As imagens continuam sendo só URLs.**
 
