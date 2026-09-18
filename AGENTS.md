@@ -241,3 +241,25 @@ Suíte de testes: 507 testes, 16 suítes, todos passando.
 **Nome de dado de teste colidindo com rótulo da interface quebra o teste.** `nome_destinatario: 'Principal'` fazia `getByText('Principal')` achar tanto o nome quanto o selo "Principal" do endereço principal. Usar nomes que não aparecem como rótulo na tela.
 
 **`window.confirm` precisa de `vi.spyOn` no jsdom.** O diálogo não existe e a remoção fica sem autorização. Lembrar de `mockRestore()` no fim.
+
+---
+
+## Segurança (FASE 20)
+
+**Comprimento mínimo de segredo não impede usar o valor de exemplo.** Lacuna real encontrada na auditoria: o schema exigia `JWT_SECRET` com 32+ caracteres, mas o placeholder do `.env.example` tem 46. Copiar o arquivo para produção sem trocar nada passava na validação, e a API subiria assinando tokens com um segredo versionado no repositório — qualquer pessoa poderia forjar um token de administrador. A guarda de produção em `config/env.js` recusa valores que contenham `troque`, `placeholder`, `changeme`, `sua_chave` ou `example`, e também recusa `CORS_ORIGINS` com `*` ou `http://`. Falha fechada: derruba o processo na subida.
+
+**Testar a guarda de configuração exige rodar o módulo em subprocesso.** `env.js` chama `process.exit(1)`, o que mataria o próprio Jest. A validação foi feita com `node -e "import('./src/config/env.js')"` sob `NODE_ENV=production`, em três casos: placeholder (falha), segredo real com https (sobe) e http em produção (falha).
+
+**A validação da rota barra antes do banco, e o código de erro revela isso.** `GET /produtos/1 OR 1=1` responde 400 `DADOS_INVALIDOS` (Zod), não o `ID_INVALIDO` que o PostgreSQL produziria via `22P02`. Esperar o código errado no teste faria parecer que a proteção não existe — ela existe, só está numa camada anterior.
+
+**Rotas de escrita de categoria ficam em `/admin/categorias`, não em `/categorias`.** `/categorias` é somente leitura (GET). Um teste de autorização que use `POST /categorias` recebe 404, não 403, e passa a testar a coisa errada. Vale conferir o arquivo de rotas antes de escrever o teste de permissão.
+
+**`PUT /enderecos/:id` usa o schema COMPLETO do cadastro.** Corpo parcial para na validação com 400 e nunca chega na checagem de propriedade. Testar IDOR com corpo parcial dá um falso negativo: o teste passa (400 está na lista aceita) sem exercitar a autorização.
+
+**O status do item só aceita PROCESSANDO, ENVIADO e ENTREGUE para o agricultor.** `CANCELADO` não está no enum (`STATUS_ITEM_AGRICULTOR`); cancelamento de item é um DELETE próprio. Enviar CANCELADO no PATCH dá 400, o que mascararia o 404 esperado de um IDOR.
+
+**Contar pedidos não prova atomicidade quando o cenário já tem pedido.** O cenário multi-agricultor cria um pedido para o cliente. O teste de rollback do checkout precisou comparar a contagem antes e depois — assumir zero daria falha falsa. O que prova a transação é o número NÃO ter mudado.
+
+**`unidade` é obrigatória na criação de produto.** Esquecer no corpo do teste dá 400 por validação, não 201. A lista de unidades é fechada (`unidade`, `kg`, `g`, `litro`, ...), então "quilo" também é recusado.
+
+**Escalação de privilégio já é barrada em duas camadas.** O enum `TIPOS_AUTOCADASTRO` rejeita `tipo: 'administrador'` com 400, e o service força o tipo a partir dessa lista caso o schema seja afrouxado. No PUT de perfil o campo `tipo` simplesmente não existe no schema, então o Zod o descarta — a requisição pode ser aceita, mas o papel no banco não muda. Há teste para os dois caminhos, e para `agricultor_id` no corpo da criação de produto (o dono vem sempre do token).

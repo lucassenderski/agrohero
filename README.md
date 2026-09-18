@@ -32,7 +32,7 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 17 | Painel do consumidor (endereços e avaliações) | ✅ |
 | 18 | Painel do agricultor | ✅ |
 | 19 | Painel administrador | ✅ |
-| 20 | Segurança | pendente |
+| 20 | Seguranca (auditoria, testes negativos e guarda de producao) | ✅ |
 | 21 | Testes completos | pendente |
 | 22 | Documentação | pendente |
 | 23 | Deploy | pendente |
@@ -442,6 +442,27 @@ O Swagger UI executa as requisições direto do navegador, o que ajuda a testar 
 - Helmet, limite de 1 MB no corpo, tratamento de erro sem stack trace
 - Log com redação de senha, token e dados de cartão
 - Nenhum dado de cartão é armazenado (responsabilidade do gateway)
+- Guarda de produção: a API **recusa subir** se `JWT_SECRET` ou `PAYMENT_WEBHOOK_SECRET` forem valores de exemplo, se `CORS_ORIGINS` tiver `*` ou usar `http://`
+
+### Testes de segurança
+
+`backend/tests/integration/seguranca.test.js` cobre o checklist de segurança como
+testes negativos — o que importa é o que o sistema **recusa**:
+
+| Área | O que é verificado |
+|---|---|
+| SQL Injection | aspas, comentário e `UNION` no filtro não quebram a query nem vazam outra tabela |
+| Senhas | resposta sem senha/hash, hash bcrypt no banco, login sem enumeração de contas |
+| JWT | payload só com `sub` e `tipo` — sem e-mail, telefone ou senha |
+| Exposição | erro de validação e 404 sem stack trace |
+| IDOR | pedido, produto, item e endereço de outro usuário |
+| Acesso vertical | cliente não cria produto, agricultor não entra no admin |
+| Preço/quantidade | preço do corpo é ignorado; quantidade acima do estoque é recusada |
+| Estoque | checkout não deixa estoque negativo e não grava pedido pela metade |
+| Status | valor inválido e transição fora da regra |
+| Autenticação | token ausente, adulterado, de usuário bloqueado ou removido |
+| CORS | origem desconhecida recebe 403; `x-powered-by` ausente; Helmet presente |
+| Escalação | cadastro não aceita `administrador`; `tipo` no corpo é descartado |
 
 ---
 
