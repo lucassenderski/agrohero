@@ -34,7 +34,7 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 19 | Painel administrador | ✅ |
 | 20 | Seguranca (auditoria, testes negativos e guarda de producao) | ✅ |
 | 21 | Testes completos (unidade, integracao, cobertura) | ✅ |
-| 22 | Documentação | pendente |
+| 22 | Documentação (OpenAPI sincronizada com o código) | ✅ |
 | 23 | Deploy | pendente |
 | 24 | Testes em produção | pendente |
 
@@ -446,7 +446,22 @@ Documentação interativa das rotas já implementadas: **http://localhost:3001/a
 
 O Swagger UI executa as requisições direto do navegador, o que ajuda a testar cada fase conforme ela é implementada.
 
-> As rotas marcadas como planejadas ainda **não** existem. Cada uma entra nesta tabela e no Swagger na fase em que for implementada, para que a documentação nunca descreva algo que não funciona.
+A especificação em JSON fica em `/api/v1/docs/openapi.json` — é ela que serve de base para gerar clientes ou importar no Postman/Insomnia.
+
+### Sincronia entre documentação e código
+
+A documentação acima não é escrita à mão por fora do app: ela é testada nos dois sentidos, para não descrever rota que não existe nem esquecer rota que existe.
+
+| Sentido | O que pega | Como |
+|---|---|---|
+| Spec → app | rota documentada que não existe (o "Try it out" devolveria 404) | o caminho documentado tem que estar na pilha de routers do Express |
+| App → spec | rota nova no app que ninguém documentou | toda rota de negócio da pilha tem que estar no OpenAPI |
+
+A verificação não usa requisição HTTP para decidir se uma rota existe. Um router protegido aplica `checkJwt` no router inteiro, antes do 404 — uma rota fictícia sob `/api/v1/carrinho/` responderia 401 e passaria como "existe". A fonte da verdade é a pilha de routers (`app._router.stack`), onde ou o caminho está, ou não está.
+
+`/health`, `/api/v1/docs` e `/` ficam de fora do contrato de negócio: são infraestrutura.
+
+Todos os schemas referenciados por `$ref` também são verificados, e toda operação precisa ter `summary` e ao menos uma resposta declarada — documentação pela metade parece completa e não é.
 
 ---
 

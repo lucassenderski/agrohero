@@ -287,3 +287,19 @@ Suíte de testes: 507 testes, 16 suítes, todos passando.
 **A validação do cadastro mostra uma mensagem por campo.** Um matcher genérico (`/informe|obrigatorio/i`) encontra vários elementos de uma vez. Asserir os textos exatos (`'Informe o nome.'`, `'Informe o e-mail.'`, `'Informe a senha.'`) é estável e documenta o comportamento real.
 
 **`requireDono` não é usado por nenhuma rota.** É um middleware pronto e testado, mas a checagem de propriedade acontece dentro dos services, que já carregaram o recurso e comparam o dono sem consulta extra. Vale saber disso antes de "consertar" o que parece código morto: ele fica como utilitário, e o teste de unidade garante que não apodreça.
+
+---
+
+## Documentação (FASE 22)
+
+**"Qualquer coisa menos 404" não prova que uma rota existe.** O teste antigo de sincronia do OpenAPI fazia a requisição e aceitava 400/401/403 como evidência de que a rota era real. Isso tinha um furo: routers protegidos montam `checkJwt` no router INTEIRO, e o middleware roda ANTES do handler de 404. Uma rota fictícia sob `/api/v1/carrinho/` responde 401 e passava no teste — ou seja, o teste aprovava documentação de rota inexistente, exatamente o que devia impedir. A prova só apareceu ao mutar a spec e ver o teste continuar verde. A fonte da verdade passou a ser a pilha de routers (`app._router.stack`), onde ou o caminho está, ou não está.
+
+**A pilha de routers do Express tem os prefixos já resolvidos.** Para saber o que o app realmente expõe, caminhar `app._router.stack` é mais fiel do que ler o texto dos arquivos de rota: montagens aninhadas (`/api/v1` → `/carrinho` → `/itens`) aparecem compostas, e um `router.use` novo entra no resultado sem precisar de manutenção no teste. Express guarda o prefixo como regexp (`'/api/v1/?(?=/|$)'`), então extrai-se a parte literal cortando em `?(?=`.
+
+**Rotas montadas em sub-router aparecem com barra dupla.** `coletarRotas` concatena prefixo + `route.path` e produz `/api/v1/carrinho//itens`. Normalizar (`\/+` → `/`, remover barra final) antes de comparar evita 58 falsos positivos.
+
+**Express usa `:id`, OpenAPI usa `{id}`.** Sem reduzir os dois a um marcador comum, toda rota com parâmetro aparece como divergente nos dois sentidos. Normalizar para `{}` resolve.
+
+**`/health` e `/api/v1/docs` ficam fora do contrato de negócio.** São infraestrutura; o `/health` existe justamente fora do versionamento porque é o caminho que o health check das plataformas usa. Excluí-los explicitamente do confronto evita "consertar" o que está certo.
+
+**Documentar nos dois sentidos é o que mantém a spec honesta.** Spec → app pega rota fictícia (`$ref` para endpoint que não existe). App → spec pega o que apodrece em silêncio: rota nova entra em produção e ninguém lembra de documentar. A API continua funcionando, então nada quebra — só a documentação passa a mentir por omissão. Validei os dois sentidos mutando a spec de propósito.

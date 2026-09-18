@@ -242,39 +242,48 @@ describe('Documentacao da API', () => {
     const caminhos = resposta.body.paths;
 
     /*
-     * Verifica METODO + CAMINHO, nao apenas o caminho.
+     * A verdade sobre quais rotas existem vem da PILHA DE ROUTERS do
+     * Express, nao de uma requisicao HTTP.
      *
-     * A versao anterior fazia GET em todo caminho documentado. Isso
-     * funcionava enquanto so existia /health (GET). Quando entraram
-     * rotas POST (login) e PUT (trocar senha), o teste passou a falhar
-     * por um motivo falso: GET /api/v1/auth/login devolve 404 porque o
-     * METODO nao existe ali, e nao porque a rota seja ficticia.
+     * A versao anterior fazia a requisicao e aceitava "qualquer coisa
+     * menos 404" como prova de que a rota existe. Isso tinha um furo
+     * silencioso: routers protegidos aplicam `checkJwt` no router
+     * INTEIRO, antes do tratamento de 404. Uma rota ficticia sob
+     * /api/v1/carrinho/ responde 401 ("nao autenticado") e passava no
+     * teste - ou seja, o teste aprovava documentacao de rota que nao
+     * existe, que era exatamente o que ele deveria impedir.
      *
-     * A intencao do teste e pegar rota documentada que nao existe (o
-     * "Try it out" devolveria 404 e a documentacao mentiria). Para isso,
-     * temos que reproduzir o mesmo metodo que o cliente usaria.
+     * A pilha de routers nao tem essa ambiguidade: ou o caminho esta la,
+     * ou nao esta.
      */
+    const reais = [];
+    coletarRotas(app._router.stack, '', reais);
+
+    const existentes = new Set(
+      reais.map((rota) => `${rota.metodo} ${normalizarRota(rota.caminho)}`),
+    );
+
     const metodos = ['get', 'post', 'put', 'patch', 'delete'];
+    const ficticias = [];
 
     for (const [caminho, operacoes] of Object.entries(caminhos)) {
       for (const metodo of metodos) {
         if (!operacoes[metodo]) continue;
 
-        const chamada = request(app)[metodo](caminho);
+        const assinatura = `${metodo.toUpperCase()} ${normalizarRota(caminho)}`;
 
-        // Rota protegida sem token responde 401; rota com corpo
-        // obrigatorio responde 400. Ambos provam que a rota EXISTE - o
-        // que nao pode acontecer e 404.
-        if (metodo !== 'get') {
-          chamada.send({});
+        if (
+          !existentes.has(assinatura) &&
+          ![' /health', ' /api/v1/docs/', ' /api/v1/docs/openapi.json'].includes(
+            `${normalizarRota(caminho)}`,
+          )
+        ) {
+          ficticias.push(assinatura);
         }
-
-        const respostaRota = await chamada;
-
-        // 404 significaria rota ficticia. 400/401/403 provam que existe.
-        expect(respostaRota.status).not.toBe(404);
       }
     }
+
+    expect(ficticias).toEqual([]);
   });
 
   it('toda operacao documentada tem summary e respostas declaradas', async () => {
@@ -317,4 +326,85 @@ describe('Documentacao da API', () => {
     expect(schemas.Paginacao).toBeDefined();
     expect(schemas.Saude).toBeDefined();
   });
+
+  it('documenta TODA rota de negocio que existe no app', async () => {
+    /*
+     * O teste anterior ("documenta apenas endpoints que existem") pega o
+     * sentido spec -> app. Falta o inverso, que e o que apodrece em
+     * silencio: uma rota nova entra no app e ninguem lembra de
+     * documentar. Ninguem percebe, porque a API continua funcionando -
+     * so a documentacao mente por omissao.
+     *
+     * Caminhamos a pilha de routers do Express (que ja tem os prefixos
+     * resolvidos) em vez de ler o texto dos arquivos: assim o teste
+     * enxerga o que o app REALMENTE expoe, inclusive montagens aninhadas.
+     */
+    const resposta = await request(app).get('/api/v1/docs/openapi.json');
+    const documentadas = new Set();
+
+    const metodos = ['get', 'post', 'put', 'patch', 'delete'];
+    for (const [caminho, operacoes] of Object.entries(resposta.body.paths)) {
+      for (const metodo of metodos) {
+        if (operacoes[metodo]) {
+          documentadas.add(`${metodo.toUpperCase()} ${normalizarRota(caminho)}`);
+        }
+      }
+    }
+
+    const reais = [];
+    coletarRotas(app._router.stack, '', reais);
+
+    /*
+     * Fora do escopo, de proposito: `/health` e `/api/v1/docs` sao
+     * infraestrutura, e `/` e a raiz que redireciona. Nenhum contrato de
+     * negocio depende deles.
+     */
+    const ignorar = (rota) =>
+      rota.endsWith(' /') ||
+      rota.endsWith(' /health') ||
+      rota.includes(' /api/v1/docs');
+
+    const naoDocumentadas = reais
+      .map((rota) => `${rota.metodo} ${normalizarRota(rota.caminho)}`)
+      .filter((rota) => !ignorar(rota) && !documentadas.has(rota));
+
+    expect(naoDocumentadas).toEqual([]);
+    expect(reais.length).toBeGreaterThan(40);
+  });
 });
+
+/*
+ * Express usa ':id' no caminho; o OpenAPI usa '{id}'. Sem igualar os
+ * dois, toda rota com parametro apareceria como nao documentada.
+ */
+function normalizarRota(caminho) {
+  let limpo = caminho.replace(/\/+/g, '/');
+  if (limpo.length > 1) limpo = limpo.replace(/\/$/, '');
+  return limpo.replace(/:[A-Za-z_]+/g, '{}').replace(/\{[A-Za-z_]+\}/g, '{}');
+}
+
+/*
+ * Percorre a pilha de middlewares do Express acumulando os prefixos de
+ * montagem. Express guarda o prefixo como regexp ('/api/v1/?(?=/|$)'),
+ * entao extraimos a parte literal.
+ */
+function coletarRotas(pilha, prefixo, destino) {
+  const metodos = ['get', 'post', 'put', 'patch', 'delete'];
+
+  for (const camada of pilha) {
+    if (camada.route) {
+      for (const metodo of Object.keys(camada.route.methods)) {
+        if (metodos.includes(metodo)) {
+          destino.push({
+            metodo: metodo.toUpperCase(),
+            caminho: prefixo + camada.route.path,
+          });
+        }
+      }
+    } else if (camada.handle && camada.handle.stack) {
+      const semAncoras = camada.regexp.source.replace(/^\^/, '').replace(/\$$/, '');
+      const literal = semAncoras.split('?(?=')[0].replace(/\\\//g, '/').replace(/\\/g, '');
+      coletarRotas(camada.handle.stack, prefixo + literal, destino);
+    }
+  }
+}
