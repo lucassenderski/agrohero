@@ -71,7 +71,9 @@ export default function Perfil() {
     }
   }
 
-  async function trocarSenha(evento) {
+  // O nome nao pode ser `trocarSenha`: seria igual ao do servico importado
+  // e a chamada dentro da funcao passaria a chamar a si mesma.
+  async function salvarSenha(evento) {
     evento.preventDefault();
     setErroSenha(null);
 
@@ -190,7 +192,7 @@ export default function Perfil() {
 
             {erroSenha && <MensagemErro erro={erroSenha} />}
 
-            <form onSubmit={trocarSenha} noValidate>
+            <form onSubmit={salvarSenha} noValidate>
               <div className="campo">
                 <label className="campo__rotulo" htmlFor="senha_atual">
                   Senha atual

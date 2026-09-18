@@ -98,15 +98,20 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 
 ## Estado
 
-Fases 0–14 concluídas (estrutura, banco, backend base, usuários, autenticação JWT, agricultores, categorias, produtos, busca e filtros, carrinho, endereços, checkout transacional, pedidos com transição de status e a regra multi-agricultor, webhooks de pagamento com assinatura HMAC e estorno no cancelamento, avaliações com autorização por compra recebida). Próxima: FASE 15 (frontend React/Vite).
-Divergências encontradas no ambiente (ex.: container de banco caído) foram diagnosticadas e resolvidas, não contornadas.
-Suíte de testes: 507 testes, 16 suítes, todos passando.
+Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
+Suíte de testes: 591 no backend (21 suítes) e 32 no frontend (5 suítes), todos passando.
 
 ## Armadilhas já encontradas (não repetir)
 
 **Zod descarta campo não declarado, em silêncio.** Um campo ausente do schema é removido sem erro. Foi a causa de um bug: `perfilAgricultorSchema` não declarava `cidade`/`estado`, então o perfil do produtor era gravado sem localização. Ao adicionar campo a um objeto aninhado, conferir se o schema o declara.
 
 **Teste que passa por motivo errado.** O teste do bug acima passava porque o payload duplicava `cidade` no nível de cima, e o fallback do service mascarava o campo perdido. Um teste só tem valor depois de verificado que FALHA sem a correção. Ao corrigir bug, rodar o teste com a correção revertida e confirmar que ele quebra.
+
+**Variável exportada no shell da sessão quebra a suíte inteira.** Testei o backend em `NODE_ENV=production` com `export CORS_ORIGINS=...` e a variável ficou viva na sessão; o `npm test` seguinte rodou com a configuração de produção e falhou um teste de CORS por motivo que não tinha nada a ver com o código. Ao testar configuração de produção, prefixar o comando (`VAR=x npm test`) em vez de `export`, ou limpar com `unset` antes da suíte.
+
+**`api.put` devolve `null` em 204, e ler `.dados` quebra a chamada.** O `api.js` trata 204 corretamente (sem corpo, retorna `null`), mas o serviço que consome precisa saber disso. `trocarSenha` acessava `resposta.dados` e estourava `TypeError`, que a tela mostrava como "Ocorreu um erro." genérico. Ao consumir um endpoint que responde 204, usar `resposta?.dados ?? null`.
+
+**Função local com o mesmo nome do serviço importado vira recursão infinita.** Em `Perfil.jsx`, o handler do formulário se chamava `trocarSenha` — igual ao import de `services/auth.js` — e a chamada dentro dele chamava a si mesma. O pedido nunca saía do navegador e não havia erro visível. `no-unused-vars` do ESLint pegou o import "não usado"; o sintoma só apareceu no teste de integração. Prefixos como `salvar`/`enviar` nos handlers evitam a colisão.
 
 **`npx jest` direto não carrega a config ESM.** Usar `npm test` (script do projeto), que aplica `NODE_ENV=test` e a config de `package.json`.
 
@@ -303,3 +308,19 @@ Suíte de testes: 507 testes, 16 suítes, todos passando.
 **`/health` e `/api/v1/docs` ficam fora do contrato de negócio.** São infraestrutura; o `/health` existe justamente fora do versionamento porque é o caminho que o health check das plataformas usa. Excluí-los explicitamente do confronto evita "consertar" o que está certo.
 
 **Documentar nos dois sentidos é o que mantém a spec honesta.** Spec → app pega rota fictícia (`$ref` para endpoint que não existe). App → spec pega o que apodrece em silêncio: rota nova entra em produção e ninguém lembra de documentar. A API continua funcionando, então nada quebra — só a documentação passa a mentir por omissão. Validei os dois sentidos mutando a spec de propósito.
+
+---
+
+## Deploy (FASE 23)
+
+**O PostgreSQL gratuito do Render expira em 30 dias e leva os dados.** Não há opção de congelar: depois de 14 dias de carência, o banco é apagado. Isso invalida o caminho óbvio de criar os três serviços no Render. O banco fica no Neon, que tem plano gratuito permanente (0,5 GB, 100 h de processamento/mês).
+
+**`preDeployCommand` e Shell/SSH são exclusivos de planos pagos do Render.** Os dois são exatamente o que um deploy de backend precisa — rodar migrations e criar o administrador — e o plano gratuito não oferece nenhum. O blueprint contorna: migrations vão no `startCommand` (`npm run migrate && npm start`), onde o `&&` preserva a propriedade importante (migration falha → servidor não sobe → versão anterior continua no ar). O seed, que precisa de terminal, é encadeado no start por uma vez.
+
+**O seed imprime uma senha que não volta.** Como não há Shell no plano gratuito, a única forma de capturá-la é ler os logs do deploy em que o seed rodou. O guia insiste em reverter o `startCommand` depois, senão o seed roda em todo deploy.
+
+**`?sslmode=require` na `DATABASE_URL` é o que liga o TLS.** O driver `pg` 8.23 lê esse parâmetro da URL e configura o SSL sozinho — nenhuma mudança no `pool.js` foi necessária. Provedores gerenciados recusam conexão sem TLS, e o erro que aparece é de conexão, não de SSL, o que despista.
+
+**`VITE_API_URL` é lida em tempo de BUILD.** O navegador é quem lê a variável; não há servidor para injetá-la depois. Corrigir a variável sem forçar um novo deploy não muda nada — o bundle continua com o valor antigo. Usei isso a favor para confirmar que a URL entrou no bundle: `grep` no `dist/assets/*.js`.
+
+**Validar o `render.yaml` antes de confiar nele.** Rodei o `startCommand` real (`npm run migrate && npm start`) contra o banco local, em `NODE_ENV=production`, e conferi: `/health` 200 com `banco: "ok"`, docs em 404, CORS liberando só a origem configurada, guarda de segredos recusando subir. Para o caso de falha, criei uma migration inválida de propósito e confirmei `exit=1` com o servidor não subindo. Sem esses testes, os dois erros de plano gratuito só apareceriam no primeiro deploy real.

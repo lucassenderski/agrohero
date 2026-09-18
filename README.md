@@ -35,7 +35,7 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 20 | Seguranca (auditoria, testes negativos e guarda de producao) | ✅ |
 | 21 | Testes completos (unidade, integracao, cobertura) | ✅ |
 | 22 | Documentação (OpenAPI sincronizada com o código) | ✅ |
-| 23 | Deploy | pendente |
+| 23 | Deploy (blueprint e guia prontos; execução exige contas do usuário) | ✅ |
 | 24 | Testes em produção | pendente |
 
 ---
@@ -144,7 +144,7 @@ São dois níveis, cada um cobrindo o que o outro não alcança:
 |---|---|---|---|
 | Unidade | `backend/tests/unit/` | funções puras: tradução de erro do PostgreSQL, autorização por papel, escape de busca, guarda de produção | 43 |
 | Integração | `backend/tests/integration/` | rotas de verdade contra PostgreSQL real | 547 |
-| Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 28 |
+| Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 32 |
 
 O frontend não testa com mock porque o que ele precisa verificar é justamente o que um mock esconde: o formato do envelope, os nomes dos campos, os códigos de erro e as regras de autorização.
 
@@ -522,19 +522,40 @@ testes negativos — o que importa é o que o sistema **recusa**:
 
 ## Deploy
 
-Estratégia para deploy gratuito (verificada em setembro de 2026):
+O passo a passo completo está em **[docs/DEPLOY.md](docs/DEPLOY.md)**. O repositório já traz o blueprint [`render.yaml`](render.yaml) na raiz, que cria os dois serviços de uma vez.
 
-| Camada | Serviço | Limitações |
-|---|---|---|
-| Frontend | Vercel ou Cloudflare Pages | estático, sem sleep |
-| Backend | Render (plano free) | dorme após 15 min ociosos; cold start de 30–60 s |
-| PostgreSQL | Neon (plano free) | 0,5 GB; escala a zero e volta sozinho |
-| Imagens | Cloudinary (plano free) | 3 GB de storage, 10 GB de tráfego |
+### Combinação escolhida
 
-> O PostgreSQL gratuito do Render expira em 30 dias e é apagado — por isso o banco fica no Neon.
-> O plano gratuito do Supabase pausa o projeto após 7 dias sem uso e exige reativação manual.
+| Camada | Serviço | Plano gratuito | Limitação principal |
+|---|---|---|---|
+| Frontend | Render (Static Site) | sim | 100 GB de banda/mês |
+| Backend | Render (Web Service) | sim | hiberna após 15 min; cold start de 30–60 s |
+| PostgreSQL | Neon | sim, permanente | 0,5 GB e 100 h de processamento/mês |
+| Imagens | Cloudinary | sim | 3 GB de storage, 10 GB de tráfego |
 
-O passo a passo detalhado de deploy é feito na Fase 23.
+### O que foi descartado, e por quê
+
+- **PostgreSQL do Render** — o banco gratuito **expira em 30 dias** e é apagado com todos os dados (14 dias de carência para migrar para um plano pago). Não serve para um projeto que precisa continuar de pé.
+- **Railway** — não tem mais plano gratuito; são US$ 5 de crédito que expiram em cerca de 30 dias.
+- **Fly.io** — sem plano gratuito para contas novas, e o PostgreSQL gerenciado começa em cerca de US$ 38/mês.
+- **Supabase** — o banco gratuito pausa após 7 dias sem uso e exige reativação manual, o que derrubaria a API sem aviso.
+
+### Duas limitações do plano gratuito que mudaram o deploy
+
+O plano gratuito do Render não executa `preDeployCommand` nem oferece Shell/SSH — os dois são exclusivos de planos pagos. O blueprint contorna as duas:
+
+- **Migrations** rodam no `startCommand` (`npm run migrate && npm start`). O `&&` garante o mesmo efeito do pré-deploy: se a migration falhar, o servidor não sobe e a versão anterior continua no ar.
+- **Seed** precisa ser encadeado no comando de start por uma vez (`... && npm run seed && npm start`), porque não há terminal para digitar o comando. A senha do administrador aparece nos logs e deve ser anotada e o comando revertido em seguida.
+
+### Variáveis de ambiente em produção
+
+O backend **recusa subir** em produção com configuração insegura (regra em `src/config/verificacaoProducao.js`):
+
+- `JWT_SECRET` e `PAYMENT_WEBHOOK_SECRET` não podem conter valores de exemplo;
+- `CORS_ORIGINS` não pode conter `*`;
+- `CORS_ORIGINS` não pode usar `http://`.
+
+A `DATABASE_URL` do Neon deve incluir `?sslmode=require` — o driver `pg` lê esse parâmetro e liga o TLS, sem nenhuma mudança de código.
 
 ---
 

@@ -34,5 +34,7 @@ export async function atualizarPerfil(dados) {
 
 export async function trocarSenha(dados) {
   const resposta = await api.put('/usuarios/senha', dados);
-  return resposta.dados;
+  // A API responde 204 (sem corpo) nesta rota, entao `resposta` e null.
+  // Nao ha representacao nova para devolver.
+  return resposta?.dados ?? null;
 }
