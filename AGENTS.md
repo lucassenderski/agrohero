@@ -263,3 +263,27 @@ Suíte de testes: 507 testes, 16 suítes, todos passando.
 **`unidade` é obrigatória na criação de produto.** Esquecer no corpo do teste dá 400 por validação, não 201. A lista de unidades é fechada (`unidade`, `kg`, `g`, `litro`, ...), então "quilo" também é recusado.
 
 **Escalação de privilégio já é barrada em duas camadas.** O enum `TIPOS_AUTOCADASTRO` rejeita `tipo: 'administrador'` com 400, e o service força o tipo a partir dessa lista caso o schema seja afrouxado. No PUT de perfil o campo `tipo` simplesmente não existe no schema, então o Zod o descarta — a requisição pode ser aceita, mas o papel no banco não muda. Há teste para os dois caminhos, e para `agricultor_id` no corpo da criação de produto (o dono vem sempre do token).
+
+---
+
+## Testes completos (FASE 21)
+
+**`jest --coverage` derruba a suíte se o banco não estiver no ar.** O relatório de cobertura roda todo mundo; sem o PostgreSQL, as 16 suítes de integração falham com `ECONNREFUSED` e o resumo mostra "509 failed" — um número que parece problema de código e é só o container parado. Checar `docker compose ps` antes de interpretar qualquer falha em massa.
+
+**O daemon do Docker não sobe sozinho no ambiente.** `docker ps` responde `dial unix /var/run/docker.sock: no such file or directory`. A correção é `sudo dockerd > /tmp/docker.log 2>&1 &` e depois `sudo docker ...` (sem `sudo`, o socket recém-criado ainda dá permissão negada).
+
+**A guarda de produção não era testável enquanto vivia dentro de `env.js`.** Módulo que chama `process.exit(1)` na importação mata o Jest. Movida para `config/verificacaoProducao.js` como função pura que devolve a lista de problemas, ganhou 11 testes. O `env.js` ficou só com a decisão de encerrar — a regra saiu de um lugar onde só podia ser verificada por `node -e` em subprocesso.
+
+**O envelope de resposta descarta `detalhes` que não seja lista.** `respostaErro` só inclui a chave quando é array não vazio. Um service que passe um objeto solto (`{ tabela: 'usuarios' }`) não vaza nada nem em desenvolvimento — o teste precisou de array para exercitar o caminho, e o objeto virou um caso à parte, documentando essa segunda barreira.
+
+**Item do carrinho aninha o produto: `item.produto.id`, não `item.produto_id` no topo.** O `produto_id` existe em outros pontos do service (na validação de checkout, por exemplo), mas o mapper devolve `produto: {...}`. Uma asserção em `itens[0].produto_id` recebe `undefined` e falha por motivo errado.
+
+**Desativar produto tem rota própria: `PATCH /produtos/:id/disponibilidade`.** `ativo` não entra no PATCH geral — de propósito, porque o efeito é outro (some do marketplace na hora). Usar o PATCH geral dá 400 e o teste mede a coisa errada.
+
+**Os ajudantes gravam o token de quem acabou de ser criado no localStorage.** Num teste que cria produtor e depois cliente, o token que fica salvo é o do cliente. Renderizar o painel do produtor sem regravar o token monta a tela como cliente, que não acha nada e falha por autorização, não por métrica. Resolver com um `renderizarComoTipo(token)` que restaura o token antes do `render`.
+
+**Rótulo de métrica colide com título de seção.** `getByText('Estoque baixo')` acha tanto a métrica quanto o `<h2>` da seção de estoque baixo, e o teste morre com "multiple elements". Escopar a busca pela região (`within(getByRole('region', { name: 'Indicadores' }))`) resolve e ainda expressa a intenção.
+
+**A validação do cadastro mostra uma mensagem por campo.** Um matcher genérico (`/informe|obrigatorio/i`) encontra vários elementos de uma vez. Asserir os textos exatos (`'Informe o nome.'`, `'Informe o e-mail.'`, `'Informe a senha.'`) é estável e documenta o comportamento real.
+
+**`requireDono` não é usado por nenhuma rota.** É um middleware pronto e testado, mas a checagem de propriedade acontece dentro dos services, que já carregaram o recurso e comparam o dono sem consulta extra. Vale saber disso antes de "consertar" o que parece código morto: ele fica como utilitário, e o teste de unidade garante que não apodreça.

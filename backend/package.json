@@ -14,6 +14,8 @@
     "migrate": "node src/database/run-migrations.js",
     "seed": "node src/database/run-seeds.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit --runInBand",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --coverage",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch --runInBand"
   },
   "dependencies": {

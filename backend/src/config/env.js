@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import { verificarConfiguracaoProducao } from './verificacaoProducao.js';
 
 dotenv.config();
 
@@ -87,53 +88,18 @@ const dados = resultado.data;
 /*
  * Guarda de producao contra segredos de exemplo.
  *
- * O schema acima exige JWT_SECRET com 32+ caracteres, mas os valores de
- * modelo do .env.example TEM esse tamanho - "troque_por_uma_chave_..."
- * tem 46. Ou seja: copiar o .env.example para producao e nao trocar nada
- * passaria na validacao, e a API subiria assinando tokens com um segredo
- * publico (esta versionado no repositorio). Qualquer pessoa poderia forjar
- * um token de administrador.
- *
- * Por isso o comprimento nao basta: recusamos valores que se identificam
- * como placeholder. E uma falha FECHADA - derruba o processo na subida,
- * em vez de rodar inseguro e descobrir depois.
+ * A regra vive em `verificacaoProducao.js` para poder ser testada sem
+ * derrubar a suite: aqui nos limitamos a decidir o que fazer com a lista
+ * de problemas devolvida.
  */
-const PLACEHOLDERS = ['troque', 'placeholder', 'changeme', 'sua_chave', 'example'];
-
-function parecePlaceholder(valor) {
-  const normalizado = String(valor).toLowerCase();
-  return PLACEHOLDERS.some((marcador) => normalizado.includes(marcador));
-}
-
 if (dados.NODE_ENV === 'production') {
-  const problemas = [];
-
-  if (parecePlaceholder(dados.JWT_SECRET)) {
-    problemas.push(
-      '  - JWT_SECRET: valor de exemplo detectado. Gere um segredo real com ' +
-        'node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"',
-    );
-  }
-
-  // Sem segredo de webhook, um evento de pagamento nao pode ser verificado.
-  if (!dados.PAYMENT_WEBHOOK_SECRET) {
-    problemas.push('  - PAYMENT_WEBHOOK_SECRET: obrigatorio em producao.');
-  } else if (parecePlaceholder(dados.PAYMENT_WEBHOOK_SECRET)) {
-    problemas.push('  - PAYMENT_WEBHOOK_SECRET: valor de exemplo detectado.');
-  }
-
-  // CORS com "*" e credenciais anula a lista branca.
-  if (dados.CORS_ORIGINS.includes('*')) {
-    problemas.push('  - CORS_ORIGINS: nao use "*" em producao.');
-  }
-
-  if (dados.CORS_ORIGINS.split(',').some((origem) => origem.trim().startsWith('http://'))) {
-    problemas.push('  - CORS_ORIGINS: use https:// em producao.');
-  }
+  const problemas = verificarConfiguracaoProducao(dados);
 
   if (problemas.length > 0) {
     console.error(
-      `\n[AgroHero] Configuracao INSEGURA para producao:\n${problemas.join('\n')}\n`,
+      `\n[AgroHero] Configuracao INSEGURA para producao:\n${problemas
+        .map((p) => `  - ${p}`)
+        .join('\n')}\n`,
     );
     process.exit(1);
   }

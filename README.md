@@ -33,7 +33,7 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 18 | Painel do agricultor | ✅ |
 | 19 | Painel administrador | ✅ |
 | 20 | Seguranca (auditoria, testes negativos e guarda de producao) | ✅ |
-| 21 | Testes completos | pendente |
+| 21 | Testes completos (unidade, integracao, cobertura) | ✅ |
 | 22 | Documentação | pendente |
 | 23 | Deploy | pendente |
 | 24 | Testes em produção | pendente |
@@ -125,7 +125,7 @@ Anote a senha. Ela é gerada aleatoriamente a cada ambiente e não é exibida de
 
 Ambos os comandos são seguros para rodar mais de uma vez: as migrations sabem o que já foi aplicado e os seeds não duplicam dados.
 
-### 6. Banco de testes
+### 6.1. Banco de testes
 
 Os testes de integração usam um banco separado e descartável:
 
@@ -136,7 +136,30 @@ cd backend && npm test
 
 Os testes **recriam o schema do zero** a cada execução, então não dependem de você ter rodado as migrations antes.
 
-### 6.1. Testes do frontend
+### 6.2. Estratégia de testes
+
+São dois níveis, cada um cobrindo o que o outro não alcança:
+
+| Nível | Onde | O que verifica | Quantidade |
+|---|---|---|---|
+| Unidade | `backend/tests/unit/` | funções puras: tradução de erro do PostgreSQL, autorização por papel, escape de busca, guarda de produção | 43 |
+| Integração | `backend/tests/integration/` | rotas de verdade contra PostgreSQL real | 547 |
+| Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 28 |
+
+O frontend não testa com mock porque o que ele precisa verificar é justamente o que um mock esconde: o formato do envelope, os nomes dos campos, os códigos de erro e as regras de autorização.
+
+```bash
+cd backend
+npm run test:unit        # só os testes de unidade (rápidos, sem banco)
+npm test                 # tudo
+npm run test:coverage    # com relatório de cobertura
+```
+
+Cobertura atual do backend: **84% das linhas**. As lacunas estão em caminhos que não têm rota (integração real com o Mercado Pago, `requireDono` — ver a nota abaixo).
+
+`requireDono` existe e está testado como unidade, mas nenhuma rota o usa: a checagem de propriedade acontece dentro dos services, que já têm o recurso carregado e podem comparar o dono sem uma segunda consulta ao banco.
+
+### 6.3. Testes do frontend
 
 Os testes do frontend também são de integração: nenhum `fetch` é mockado, cada
 teste fala com a API de verdade. Por isso eles exigem um backend no ar.
