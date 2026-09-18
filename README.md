@@ -531,7 +531,9 @@ O passo a passo completo está em **[docs/DEPLOY.md](docs/DEPLOY.md)**. O reposi
 | Frontend | Render (Static Site) | sim | 100 GB de banda/mês |
 | Backend | Render (Web Service) | sim | hiberna após 15 min; cold start de 30–60 s |
 | PostgreSQL | Neon | sim, permanente | 0,5 GB e 100 h de processamento/mês |
-| Imagens | Cloudinary | sim | 3 GB de storage, 10 GB de tráfego |
+| Imagens | Cloudinary (futuro) | sim | 3 GB de storage, 10 GB de tráfego |
+
+> **Sobre a linha de imagens:** o upload de arquivo ainda **não está implementado**. O produto guarda apenas `imagem_url`, informada no cadastro. As variáveis `STORAGE_DRIVER` e `CLOUDINARY_*` já existem no `.env.example` e são validadas pelo `env.js`, mas nenhum código as consome ainda — a linha acima é o destino planejado, não algo que o deploy atual use.
 
 ### O que foi descartado, e por quê
 

@@ -236,9 +236,13 @@ Isso morde justamente na hora da demonstração: você cria duas ou três contas
 
 O limite geral da API é bem mais folgado: 300 requisições por 15 minutos por IP (`RATE_LIMIT_MAX_REQUISICOES`). Ele é o que protege a API de varredura, e não vale afrouxar sem motivo.
 
-**As imagens continuam sendo só URLs.**
+**As imagens são URLs, e ainda não há upload.**
 
-O projeto guarda a URL da imagem, não o arquivo. Enquanto `STORAGE_DRIVER=local`, o upload fica no disco do servidor, que no Render é descartável: some a cada deploy. Para publicar de verdade, configure o Cloudinary (plano gratuito) e mude para `STORAGE_DRIVER=cloudinary` com as três variáveis `CLOUDINARY_*`. O `.env.example` já tem os campos.
+O produto guarda apenas `imagem_url` (uma URL que você informa no cadastro); o arquivo nunca é enviado para a API. **Não existe endpoint de upload implementado** — não há `multer` nem o SDK do Cloudinary nas dependências.
+
+As variáveis `STORAGE_DRIVER` e `CLOUDINARY_*` do `.env.example` estão reservadas para quando o upload for implementado: o `env.js` já as valida, mas **nenhum código as consome hoje**. Não perca tempo configurando Cloudinary para o deploy; sem o endpoint, elas não mudam nada.
+
+Para a demonstração, use URLs de imagens públicas já hospedadas (por exemplo, uma imagem no Wikimedia Commons ou no seu próprio repositório). A coluna aceita qualquer URL válida, e a vitrine exibe normalmente.
 
 ---
 
