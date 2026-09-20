@@ -8,7 +8,13 @@
  * de uma chamada que "esqueceu" o header.
  */
 
-const URL_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+const URL_BASE = import.meta.env.VITE_API_URL;
+
+if (!URL_BASE) {
+  throw new Error(
+    'VITE_API_URL nao foi configurada. Configure a URL da API no ambiente do frontend.',
+  );
+}
 
 /* Nome da chave no localStorage onde o token JWT e guardado. */
 export const CHAVE_TOKEN = 'agrohero:token';

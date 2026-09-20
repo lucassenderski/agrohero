@@ -16,7 +16,7 @@ export default function Home() {
     let cancelado = false;
 
     // O /health fica fora do /api/v1, entao montamos a URL sem o sufixo.
-    const urlBase = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1').replace(
+    const urlBase = (import.meta.env.VITE_API_URL ).replace(
       /\/api\/v1\/?$/,
       '',
     );

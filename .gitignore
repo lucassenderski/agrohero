@@ -12,6 +12,7 @@ node_modules/
 .env.local
 .env.*.local
 !.env.example
+.env.*.backup
 
 # Builds
 dist/

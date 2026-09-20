@@ -10,7 +10,7 @@ import { salvarToken, removerToken } from '../services/api.js';
  * um teste nao depende do que outro deixou no banco.
  */
 
-const URL_API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+const URL_API = import.meta.env.VITE_API_URL || 'http://localhost:3002/api/v1';
 
 /* Sufixo unico por execucao, para nao colidir com o e-mail de outro teste. */
 function sufixoUnico() {
