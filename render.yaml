@@ -66,6 +66,17 @@ services:
       - key: CORS_ORIGINS
         sync: false
 
+      # E-mail de recuperacao de senha. Sem dominio proprio, o Resend
+      # permite testes com onboarding@resend.dev para o e-mail da conta.
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: "AgroHero <onboarding@resend.dev>"
+      - key: FRONTEND_URL
+        sync: false
+
       # Documentacao (Swagger) desligada em producao.
       - key: ENABLE_API_DOCS
         value: "false"
