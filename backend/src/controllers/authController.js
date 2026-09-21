@@ -1,6 +1,7 @@
 import authService from '../services/authService.js';
 import { respostaCriada, respostaSucesso } from '../utils/resposta.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import redefinicaoSenhaService from '../services/redefinicaoSenhaService.js';
 
 /*
  * Controller de autenticacao.
@@ -35,4 +36,14 @@ export const entrar = asyncHandler(async (req, res) => {
   return respostaSucesso(res, { usuario, token });
 });
 
-export default { cadastrar, entrar };
+export const solicitarRedefinicao = asyncHandler(async (req, res) => {
+  const resultado = await redefinicaoSenhaService.solicitar(req.dadosValidados.body);
+  return respostaSucesso(res, resultado, 202);
+});
+
+export const redefinirSenha = asyncHandler(async (req, res) => {
+  const resultado = await redefinicaoSenhaService.redefinir(req.dadosValidados.body);
+  return respostaSucesso(res, resultado);
+});
+
+export default { cadastrar, entrar, solicitarRedefinicao, redefinirSenha };

@@ -50,7 +50,7 @@ export async function prepararSchema() {
 /* Apaga os dados, mantendo o schema. Usado entre testes. */
 export async function limparDados() {
   await pool.query(`
-    TRUNCATE avaliacoes, pagamentos, pedido_itens, pedidos,
+    TRUNCATE tokens_redefinicao_senha, avaliacoes, pagamentos, pedido_itens, pedidos,
              carrinho_itens, carrinhos, produtos, agricultores,
              enderecos, usuarios, categorias
     RESTART IDENTITY CASCADE

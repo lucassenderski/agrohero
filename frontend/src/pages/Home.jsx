@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listarProdutos } from '../services/catalogo.js';
+import { listarCategorias, listarProdutos } from '../services/catalogo.js';
 import { useRequisicao } from '../hooks/useRequisicao.js';
 import { useCarrinho } from '../contexts/CarrinhoContext.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -23,6 +23,7 @@ export default function Home() {
     () => listarProdutos({ limite: 8, ordenar: 'recentes', disponivel: 'true' }),
     [],
   );
+  const { dados: categorias = [] } = useRequisicao(() => listarCategorias(), []);
 
   useEffect(() => {
     let cancelado = false;
@@ -87,8 +88,12 @@ export default function Home() {
           pura para a sua mesa.
         </p>
         <div className="home__acoes">
-          <a className="botao botao--destaque" href="/produtos">Ver produtos locais <span>→</span></a>
-          <a className="botao botao--contorno" href="/agricultores">Conheça os produtores</a>
+          <Link className="botao botao--destaque" to="/produtos">
+            Ver produtos locais <span>→</span>
+          </Link>
+          <Link className="botao botao--contorno" to="/agricultores">
+            Conheça os produtores
+          </Link>
         </div>
         <div className="home__beneficios">
           <span>♧ Zero agrotóxicos</span>
@@ -104,13 +109,28 @@ export default function Home() {
           <h2 className="home__diagnostico-titulo">Escolha por categoria</h2>
         </div>
         <div className="home__categorias">
-          {['Todos os alimentos', 'Verduras & folhas', 'Legumes & raízes', 'Frutas da estação'].map(
-            (categoria, indice) => (
-              <a href="/produtos" className={indice === 0 ? 'home__categoria home__categoria--ativa' : 'home__categoria'} key={categoria}>
-                {categoria}
-              </a>
-            ),
-          )}
+          <Link to="/produtos" className="home__categoria home__categoria--ativa">
+            Todos os alimentos
+          </Link>
+          {(categorias.length > 0
+            ? categorias.filter((categoria) => categoria.ativo !== false).slice(0, 3)
+            : ['Verduras & folhas', 'Legumes & raízes', 'Frutas da estação'].map((nome) => ({
+                id: null,
+                nome,
+              }))
+          ).map((categoria) => (
+            <Link
+              to={
+                categoria.id
+                  ? `/produtos?categoria_id=${categoria.id}`
+                  : '/categorias'
+              }
+              className="home__categoria"
+              key={categoria.id}
+            >
+              {categoria.nome}
+            </Link>
+          ))}
         </div>
 
         {estado.status === 'carregando' && (

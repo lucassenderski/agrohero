@@ -38,6 +38,17 @@
   color: var(--cor-texto-suave);
 }
 
+.auth__sucesso {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-4);
+  padding: var(--esp-4);
+  border: 1px solid var(--cor-primaria-200);
+  border-radius: var(--raio-md);
+  background: var(--cor-primaria-50);
+  color: var(--cor-primaria-800);
+}
+
 /* --- Escolha do tipo de conta --- */
 
 .auth__tipos {

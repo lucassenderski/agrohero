@@ -103,6 +103,9 @@ export default function Login() {
         </form>
 
         <p className="auth__rodape">
+          <Link to="/esqueci-senha">Esqueci minha senha</Link>
+        </p>
+        <p className="auth__rodape">
           Ainda nao tem conta? <Link to="/cadastro">Cadastre-se</Link>
         </p>
       </div>

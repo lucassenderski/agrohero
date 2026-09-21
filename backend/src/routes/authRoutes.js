@@ -2,7 +2,12 @@ import { Router } from 'express';
 import authController from '../controllers/authController.js';
 import { validar } from '../middlewares/validar.js';
 import { limiteLogin } from '../middlewares/rateLimit.js';
-import { cadastroSchema, loginSchema } from '../validators/authValidators.js';
+import {
+  cadastroSchema,
+  loginSchema,
+  solicitarRedefinicaoSchema,
+  redefinirSenhaSchema,
+} from '../validators/authValidators.js';
 
 /*
  * Rotas publicas de autenticacao, montadas em /api/v1/auth.
@@ -42,6 +47,20 @@ router.post(
   limiteLogin,
   validar({ body: loginSchema }),
   authController.entrar,
+);
+
+router.post(
+  '/solicitar-redefinicao',
+  limiteLogin,
+  validar({ body: solicitarRedefinicaoSchema }),
+  authController.solicitarRedefinicao,
+);
+
+router.post(
+  '/redefinir-senha',
+  limiteLogin,
+  validar({ body: redefinirSenhaSchema }),
+  authController.redefinirSenha,
 );
 
 export default router;

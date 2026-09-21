@@ -37,6 +37,15 @@ export default function Perfil() {
     telefone: usuario.telefone || '',
     cidade: usuario.cidade || '',
     estado: usuario.estado || '',
+    propriedade: {
+      nome_fazenda: usuario.agricultor?.nome_fazenda || '',
+      descricao: usuario.agricultor?.descricao || '',
+      historia: usuario.agricultor?.historia || '',
+      endereco: usuario.agricultor?.endereco || '',
+      cidade: usuario.agricultor?.cidade || '',
+      estado: usuario.agricultor?.estado || '',
+      certificacoes: usuario.agricultor?.certificacoes || [],
+    },
   });
 
   const [erroPerfil, setErroPerfil] = useState(null);
@@ -51,12 +60,27 @@ export default function Perfil() {
     setSalvando(true);
     setErroPerfil(null);
     try {
-      await atualizarPerfil({
+      const dados = {
         nome: valores.nome.trim(),
         telefone: valores.telefone || undefined,
         cidade: valores.cidade || undefined,
         estado: valores.estado || undefined,
-      });
+      };
+
+      if (usuario.tipo === 'agricultor') {
+        dados.agricultor = {
+          ...valores.propriedade,
+          nome_fazenda: valores.propriedade.nome_fazenda.trim(),
+          descricao: valores.propriedade.descricao || undefined,
+          historia: valores.propriedade.historia || undefined,
+          endereco: valores.propriedade.endereco || undefined,
+          cidade: valores.propriedade.cidade || undefined,
+          estado: valores.propriedade.estado || undefined,
+          certificacoes: valores.propriedade.certificacoes,
+        };
+      }
+
+      await atualizarPerfil(dados);
       /*
        * Recarrega do servidor em vez de aplicar a resposta localmente: e
        * o backend que normaliza os campos (trim, maiusculas do estado),
@@ -185,6 +209,149 @@ export default function Perfil() {
             </button>
           </form>
         </section>
+
+        {usuario.tipo === 'agricultor' && (
+          <section className="painel-secao">
+            <h2 className="painel-secao__titulo">Dados da propriedade</h2>
+            <p className="campo__dica">
+              Essas informações aparecem no seu perfil público e ajudam os clientes a
+              conhecerem sua produção.
+            </p>
+
+            <div className="campo">
+              <label className="campo__rotulo" htmlFor="nome_fazenda">
+                Nome da propriedade
+              </label>
+              <input
+                id="nome_fazenda"
+                className="campo__entrada"
+                value={valores.propriedade.nome_fazenda}
+                onChange={(evento) =>
+                  alterar('propriedade', {
+                    ...valores.propriedade,
+                    nome_fazenda: evento.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <div className="campo">
+              <label className="campo__rotulo" htmlFor="descricao_propriedade">
+                Descrição
+              </label>
+              <textarea
+                id="descricao_propriedade"
+                className="campo__area"
+                value={valores.propriedade.descricao}
+                onChange={(evento) =>
+                  alterar('propriedade', {
+                    ...valores.propriedade,
+                    descricao: evento.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <div className="campo">
+              <label className="campo__rotulo" htmlFor="historia_propriedade">
+                História da propriedade
+              </label>
+              <textarea
+                id="historia_propriedade"
+                className="campo__area"
+                value={valores.propriedade.historia}
+                onChange={(evento) =>
+                  alterar('propriedade', {
+                    ...valores.propriedade,
+                    historia: evento.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <div className="campo">
+              <label className="campo__rotulo" htmlFor="endereco_propriedade">
+                Endereço da propriedade
+              </label>
+              <input
+                id="endereco_propriedade"
+                className="campo__entrada"
+                value={valores.propriedade.endereco}
+                onChange={(evento) =>
+                  alterar('propriedade', {
+                    ...valores.propriedade,
+                    endereco: evento.target.value,
+                  })
+                }
+              />
+            </div>
+
+            <div className="campo campo__linha campo__linha--2">
+              <div className="campo">
+                <label className="campo__rotulo" htmlFor="cidade_propriedade">
+                  Cidade da propriedade
+                </label>
+                <input
+                  id="cidade_propriedade"
+                  className="campo__entrada"
+                  value={valores.propriedade.cidade}
+                  onChange={(evento) =>
+                    alterar('propriedade', {
+                      ...valores.propriedade,
+                      cidade: evento.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div className="campo">
+                <label className="campo__rotulo" htmlFor="estado_propriedade">
+                  Estado da propriedade
+                </label>
+                <select
+                  id="estado_propriedade"
+                  className="campo__selecao"
+                  value={valores.propriedade.estado}
+                  onChange={(evento) =>
+                    alterar('propriedade', {
+                      ...valores.propriedade,
+                      estado: evento.target.value,
+                    })
+                  }
+                >
+                  <option value="">--</option>
+                  {ESTADOS.map((uf) => (
+                    <option key={uf} value={uf}>
+                      {uf}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="campo">
+              <label className="campo__rotulo" htmlFor="certificacoes_propriedade">
+                Certificações
+              </label>
+              <input
+                id="certificacoes_propriedade"
+                className="campo__entrada"
+                value={valores.propriedade.certificacoes.join(', ')}
+                onChange={(evento) =>
+                  alterar('propriedade', {
+                    ...valores.propriedade,
+                    certificacoes: evento.target.value
+                      .split(',')
+                      .map((item) => item.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
+              <span className="campo__dica">
+                Separe cada certificação por vírgula.
+              </span>
+            </div>
+          </section>
+        )}
 
         <div className="checkout__coluna">
           <section className="painel-secao">

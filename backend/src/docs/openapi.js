@@ -892,6 +892,21 @@ const schemas = {
       email: { type: 'string', format: 'email', example: 'joao@teste.com' },
       senha: { type: 'string', example: 'SenhaSegura1' },
     },
+
+    SolicitarRedefinicaoSenha: {
+      type: 'object',
+      required: ['email'],
+      properties: { email: { type: 'string', format: 'email', example: 'joao@teste.com' } },
+    },
+
+    RedefinirSenha: {
+      type: 'object',
+      required: ['token', 'senha'],
+      properties: {
+        token: { type: 'string', format: 'hex', minLength: 64, maxLength: 64 },
+        senha: { type: 'string', minLength: 8, example: 'NovaSenhaSegura1' },
+      },
+    },
   },
 
   AtualizarPerfil: {
@@ -1125,6 +1140,7 @@ export const openapi = {
             'application/json': { schema: { $ref: '#/components/schemas/Login' } },
           },
         },
+
         responses: {
           200: {
             description: 'Autenticado.',
@@ -1140,6 +1156,48 @@ export const openapi = {
             description: 'Muitas tentativas de login (protecao contra forca bruta).',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
+        },
+      },
+    },
+
+    '/api/v1/auth/solicitar-redefinicao': {
+      post: {
+        tags: ['Autenticacao'],
+        summary: 'Solicita redefinicao de senha',
+        description:
+          'Sempre responde 202 com a mesma mensagem, exista ou nao uma conta para o e-mail informado. O token nunca e devolvido pela API; e enviado pelo provedor de e-mail.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/SolicitarRedefinicaoSenha' },
+            },
+          },
+        },
+        responses: {
+          202: { description: 'Solicitacao recebida.' },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          429: { description: 'Muitas tentativas.' },
+        },
+      },
+    },
+
+    '/api/v1/auth/redefinir-senha': {
+      post: {
+        tags: ['Autenticacao'],
+        summary: 'Redefine senha com token de uso unico',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/RedefinirSenha' },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Senha redefinida.' },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          422: { description: 'Token invalido, expirado ou ja utilizado.' },
         },
       },
     },
