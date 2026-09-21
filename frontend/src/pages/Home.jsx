@@ -23,7 +23,8 @@ export default function Home() {
     () => listarProdutos({ limite: 8, ordenar: 'recentes', disponivel: 'true' }),
     [],
   );
-  const { dados: categorias = [] } = useRequisicao(() => listarCategorias(), []);
+  const { dados: categoriasDados } = useRequisicao(() => listarCategorias(), []);
+  const categorias = categoriasDados || [];
 
   useEffect(() => {
     let cancelado = false;
