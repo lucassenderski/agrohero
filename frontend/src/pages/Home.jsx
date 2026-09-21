@@ -1,16 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { listarProdutos } from '../services/catalogo.js';
+import { useRequisicao } from '../hooks/useRequisicao.js';
+import { useCarrinho } from '../contexts/CarrinhoContext.jsx';
+import { useAuth } from '../contexts/AuthContext.jsx';
+import { useNotificacao } from '../contexts/NotificacaoContext.jsx';
+import ProductGrid from '../components/ProductGrid.jsx';
+import { MensagemErro } from '../components/ui.jsx';
 import './Home.css';
-
-/*
- * Home da FASE 1.
- *
- * O objetivo aqui NAO e a interface final: e provar, no navegador, que
- * o frontend fala com o backend e que o backend fala com o PostgreSQL.
- * Se este cartao mostrar "API: ok / Banco: ok", a FASE 1 esta validada
- * ponta a ponta.
- */
 export default function Home() {
   const [estado, setEstado] = useState({ status: 'carregando' });
+  const { autenticado, ehCliente } = useAuth();
+  const { adicionar } = useCarrinho();
+  const { sucesso, erro: notificarErro } = useNotificacao();
+  const [adicionandoId, setAdicionandoId] = useState(null);
+  const {
+    dados: produtosDados,
+    carregando: produtosCarregando,
+    erro: produtosErro,
+    recarregar: recarregarProdutos,
+  } = useRequisicao(
+    () => listarProdutos({ limite: 8, ordenar: 'recentes', disponivel: 'true' }),
+    [],
+  );
 
   useEffect(() => {
     let cancelado = false;
@@ -49,21 +61,60 @@ export default function Home() {
     };
   }, []);
 
+  const adicionarAoCarrinho = useCallback(
+    async (produto) => {
+      setAdicionandoId(produto.id);
+      try {
+        await adicionar(produto.id, 1);
+        sucesso(`"${produto.nome}" adicionado ao carrinho.`);
+      } catch (falha) {
+        notificarErro(falha.mensagem || 'Nao foi possivel adicionar ao carrinho.');
+      } finally {
+        setAdicionandoId(null);
+      }
+    },
+    [adicionar, notificarErro, sucesso],
+  );
+
   return (
     <div className="container home">
       <section className="home__hero">
-        <p className="home__selo">Projeto em desenvolvimento</p>
-        <h1 className="home__titulo">AgroHero</h1>
+        <p className="home__selo">⌖ Agro Hero Toledo · Agricultura familiar & orgânicos</p>
+        <h1 className="home__titulo">Alimentos orgânicos <mark>frescos</mark> direto de quem planta em Toledo.</h1>
         <p className="home__subtitulo">
-          Marketplace que conecta produtores rurais a consumidores de produtos organicos.
+          Conectamos você aos produtores familiares de Novo Sarandi, Concórdia do Oeste,
+          Dez de Maio e Vila Nova. Colheita fresca, preço justo para o agricultor e saúde
+          pura para a sua mesa.
         </p>
+        <div className="home__acoes">
+          <a className="botao botao--destaque" href="/produtos">Ver produtos locais <span>→</span></a>
+          <a className="botao botao--contorno" href="/agricultores">Conheça os produtores</a>
+        </div>
+        <div className="home__beneficios">
+          <span>♧ Zero agrotóxicos</span>
+          <span>↗ Renda 100% ao agricultor</span>
+          <span>▣ Entregas em Toledo</span>
+          <span>⌖ Ponto Lago Municipal</span>
+        </div>
       </section>
 
       <section className="home__diagnostico" aria-live="polite">
-        <h2 className="home__diagnostico-titulo">Diagnostico do ambiente</h2>
+        <div>
+          <p className="home__eyebrow">Tudo que sua mesa precisa</p>
+          <h2 className="home__diagnostico-titulo">Escolha por categoria</h2>
+        </div>
+        <div className="home__categorias">
+          {['Todos os alimentos', 'Verduras & folhas', 'Legumes & raízes', 'Frutas da estação'].map(
+            (categoria, indice) => (
+              <a href="/produtos" className={indice === 0 ? 'home__categoria home__categoria--ativa' : 'home__categoria'} key={categoria}>
+                {categoria}
+              </a>
+            ),
+          )}
+        </div>
 
         {estado.status === 'carregando' && (
-          <p className="home__mensagem">Verificando a conexao com a API...</p>
+          <p className="home__mensagem">Verificando a conexão com a API...</p>
         )}
 
         {estado.status === 'ok' && (
@@ -89,11 +140,35 @@ export default function Home() {
       </section>
 
       <section className="home__proximas">
-        <h2>O que vem a seguir</h2>
+        <p className="home__eyebrow">Feito perto, feito com cuidado</p>
+        <h2>Da nossa terra para a sua cozinha</h2>
         <p>
-          FASE 2: banco de dados (migrations e seeds). Depois usuarios, autenticacao JWT,
-          produtos, carrinho, checkout e pedidos.
+          Explore alimentos cultivados por quem conhece cada canto da nossa região.
+          Compre direto, apoie a agricultura familiar e receba produtos de verdade.
         </p>
+      </section>
+
+      <section className="home__produtos" aria-labelledby="produtos-destaque">
+        <div className="home__secao-cabecalho">
+          <div>
+            <p className="home__eyebrow">Colhidos para você</p>
+            <h2 id="produtos-destaque">Produtos em destaque</h2>
+          </div>
+          <Link className="home__ver-todos" to="/produtos">
+            Ver todos →
+          </Link>
+        </div>
+        {produtosErro ? (
+          <MensagemErro erro={produtosErro} aoTentarNovamente={recarregarProdutos} />
+        ) : (
+          <ProductGrid
+            produtos={produtosDados?.produtos || []}
+            carregando={produtosCarregando}
+            aoAdicionar={autenticado && ehCliente ? adicionarAoCarrinho : undefined}
+            produtoAdicionando={adicionandoId}
+            descricaoVazio="Ainda nao ha produtos disponiveis no marketplace."
+          />
+        )}
       </section>
     </div>
   );

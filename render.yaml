@@ -89,7 +89,7 @@ services:
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        sync: false
+        value: https://agrohero.onrender.com/api/v1
       - key: VITE_APP_NOME
         value: AgroHero
     routes:

@@ -10,29 +10,29 @@
 
 :root {
   /* --- Cores da marca --- */
-  --cor-primaria-50: #f0f9f1;
-  --cor-primaria-100: #dcf0de;
-  --cor-primaria-200: #bbe1c0;
-  --cor-primaria-300: #8dca96;
-  --cor-primaria-400: #5aab68;
-  --cor-primaria-500: #3a8e4a;
-  --cor-primaria-600: #2a7038;
-  --cor-primaria-700: #22592e;
-  --cor-primaria-800: #1d4726;
-  --cor-primaria-900: #183a20;
+  --cor-primaria-50: #effbf5;
+  --cor-primaria-100: #d5f6e5;
+  --cor-primaria-200: #a9ebca;
+  --cor-primaria-300: #6ed8aa;
+  --cor-primaria-400: #28bd80;
+  --cor-primaria-500: #079c68;
+  --cor-primaria-600: #007b55;
+  --cor-primaria-700: #006047;
+  --cor-primaria-800: #064936;
+  --cor-primaria-900: #07352c;
 
-  --cor-acento-100: #fbe9e0;
-  --cor-acento-400: #e07a4f;
-  --cor-acento-500: #c95f33;
-  --cor-acento-600: #a84a26;
+  --cor-acento-100: #fff3c4;
+  --cor-acento-400: #ffc928;
+  --cor-acento-500: #f5ad12;
+  --cor-acento-600: #c87900;
 
   /* --- Cores neutras --- */
-  --cor-texto: #1f2933;
-  --cor-texto-suave: #52606d;
-  --cor-texto-claro: #7b8794;
-  --cor-borda: #d9e0e5;
-  --cor-borda-suave: #eef2f4;
-  --cor-fundo: #f7f9fa;
+  --cor-texto: #25312d;
+  --cor-texto-suave: #65736d;
+  --cor-texto-claro: #8c9893;
+  --cor-borda: #e4e9e6;
+  --cor-borda-suave: #f1f4f2;
+  --cor-fundo: #fbfaf7;
   --cor-superficie: #ffffff;
 
   /* --- Feedback --- */
@@ -56,8 +56,7 @@
   --esp-8: 4rem;
 
   /* --- Tipografia --- */
-  --fonte-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
+  --fonte-base: 'Trebuchet MS', 'Segoe UI', sans-serif;
   --texto-xs: 0.75rem;
   --texto-sm: 0.875rem;
   --texto-base: 1rem;
@@ -79,8 +78,8 @@
   --sombra-lg: 0 10px 24px rgba(31, 41, 51, 0.14);
 
   /* --- Layout --- */
-  --largura-maxima: 1200px;
-  --altura-header: 4rem;
+  --largura-maxima: 1280px;
+  --altura-header: 4.8rem;
 
   /* --- Transicao padrao --- */
   --transicao: 160ms ease-in-out;

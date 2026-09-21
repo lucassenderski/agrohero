@@ -33,6 +33,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+::selection {
+  background: var(--cor-acento-400);
+  color: var(--cor-primaria-900);
+}
+
 img,
 picture,
 svg,
