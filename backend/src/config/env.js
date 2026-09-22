@@ -37,6 +37,10 @@ const ambienteSchema = z.object({
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
 
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  EMAIL_PROVIDER: z.enum(['log', 'resend']).default('log'),
+  RESEND_API_KEY: z.string().optional().default(''),
+  EMAIL_FROM: z.string().default('AgroHero <onboarding@resend.dev>'),
+  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
 
   RATE_LIMIT_JANELA_MINUTOS: z.coerce.number().int().positive().default(15),
   RATE_LIMIT_MAX_REQUISICOES: z.coerce.number().int().positive().default(300),

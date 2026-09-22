@@ -35,12 +35,21 @@ export default function Header() {
 
   return (
     <header className="header">
+      <div className="header__barra">
+        <div className="container header__barra-interna">
+          <span>Agro Hero Toledo - PR · Conectando agricultores familiares e consumidores</span>
+          <span className="header__barra-links">
+            <span>Cadastro seguro & LGPD</span>
+            <span>Sobre a iniciativa</span>
+          </span>
+        </div>
+      </div>
       <div className="container header__interno">
         <Link to="/" className="header__marca" onClick={fecharMenu}>
           <span className="header__logo" aria-hidden="true">
-            🌱
+            ◒
           </span>
-          <span className="header__nome">{NOME_APP}</span>
+          <span className="header__nome">{NOME_APP}<small>TOLEDO - PR</small></span>
         </Link>
 
         <button
@@ -58,13 +67,13 @@ export default function Header() {
           aria-label="Navegacao principal"
         >
           <Link to="/produtos" className="header__link" onClick={fecharMenu}>
-            Produtos
+            Marketplace orgânico
           </Link>
           <Link to="/categorias" className="header__link" onClick={fecharMenu}>
             Categorias
           </Link>
           <Link to="/agricultores" className="header__link" onClick={fecharMenu}>
-            Produtores
+            Agricultores
           </Link>
 
           {ehAdmin && (
@@ -119,7 +128,7 @@ export default function Header() {
           ) : (
             <div className="header__usuario">
               <Link to="/login" className="header__link" onClick={fecharMenu}>
-                Entrar
+                Entrar / Cadastrar
               </Link>
               <Link to="/cadastro" className="botao botao--primario" onClick={fecharMenu}>
                 Criar conta

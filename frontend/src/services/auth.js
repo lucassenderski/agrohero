@@ -38,3 +38,13 @@ export async function trocarSenha(dados) {
   // Nao ha representacao nova para devolver.
   return resposta?.dados ?? null;
 }
+
+export async function solicitarRedefinicaoSenha(email) {
+  const resposta = await api.post('/auth/solicitar-redefinicao', { email });
+  return resposta.dados;
+}
+
+export async function redefinirSenha(dados) {
+  const resposta = await api.post('/auth/redefinir-senha', dados);
+  return resposta.dados;
+}

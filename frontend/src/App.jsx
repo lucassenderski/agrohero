@@ -9,6 +9,8 @@ import Categorias from './pages/Categorias.jsx';
 import Agricultores from './pages/Agricultores.jsx';
 import AgricultorDetalhe from './pages/AgricultorDetalhe.jsx';
 import Login from './pages/Login.jsx';
+import EsqueciSenha from './pages/EsqueciSenha.jsx';
+import RedefinirSenha from './pages/RedefinirSenha.jsx';
 import Cadastro from './pages/Cadastro.jsx';
 import Carrinho from './pages/Carrinho.jsx';
 import Checkout from './pages/Checkout.jsx';
@@ -43,6 +45,8 @@ export default function App() {
         <Route path="/agricultores" element={<Agricultores />} />
         <Route path="/agricultores/:id" element={<AgricultorDetalhe />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+        <Route path="/redefinir-senha" element={<RedefinirSenha />} />
         <Route path="/cadastro" element={<Cadastro />} />
 
         {/* Qualquer usuario autenticado. */}

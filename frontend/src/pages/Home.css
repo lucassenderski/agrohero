@@ -1,35 +1,80 @@
 .home {
-  padding-block: var(--esp-6);
+  padding-block: var(--esp-6) var(--esp-8);
   display: flex;
   flex-direction: column;
   gap: var(--esp-6);
 }
 
 .home__hero {
-  text-align: center;
-  padding-block: var(--esp-4);
+  min-height: 29rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(2rem, 7vw, 5rem) clamp(1.5rem, 6vw, 5rem);
+  border-radius: 1.6rem;
+  color: white;
+  background:
+    radial-gradient(circle at 78% 20%, rgba(58, 176, 118, 0.32), transparent 34%),
+    linear-gradient(118deg, #00634c 0%, #005440 52%, #172d29 100%);
+  box-shadow: var(--sombra-lg);
+  overflow: hidden;
 }
 
 .home__selo {
   display: inline-block;
   font-size: var(--texto-xs);
   font-weight: var(--peso-medio);
-  color: var(--cor-acento-600);
-  background-color: var(--cor-acento-100);
+  color: var(--cor-primaria-100);
+  border: 1px solid rgba(126, 230, 175, 0.45);
+  background-color: rgba(0, 150, 99, 0.45);
   padding: var(--esp-1) var(--esp-3);
   border-radius: var(--raio-completo);
   margin-bottom: var(--esp-3);
 }
 
 .home__titulo {
-  color: var(--cor-primaria-700);
+  max-width: 18ch;
+  color: white;
+  font-size: clamp(2.4rem, 6vw, 4.2rem);
+  letter-spacing: -0.055em;
   margin-bottom: var(--esp-2);
 }
 
+.home__titulo mark {
+  color: var(--cor-primaria-900);
+  background: var(--cor-primaria-300);
+  padding-inline: 0.08em;
+}
+
 .home__subtitulo {
-  color: var(--cor-texto-suave);
-  max-width: 42ch;
-  margin-inline: auto;
+  color: var(--cor-primaria-100);
+  max-width: 68ch;
+  margin-bottom: var(--esp-5);
+  font-size: var(--texto-lg);
+}
+
+.home__acoes { display: flex; flex-wrap: wrap; gap: var(--esp-3); }
+.home__acoes .botao { text-decoration: none; }
+.botao--destaque {
+  background: var(--cor-acento-400);
+  color: #2b260e;
+  border-color: var(--cor-acento-400);
+  font-weight: var(--peso-forte);
+}
+.botao--contorno {
+  background: transparent;
+  border: 1px solid rgba(126, 230, 175, 0.55);
+  color: white;
+}
+.home__beneficios {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--esp-3);
+  margin-top: var(--esp-7);
+  padding-top: var(--esp-4);
+  border-top: 1px solid rgba(126, 230, 175, 0.2);
+  color: var(--cor-primaria-200);
+  font-size: var(--texto-sm);
 }
 
 .home__diagnostico,
@@ -41,12 +86,20 @@
   box-shadow: var(--sombra-sm);
 }
 
+.home__diagnostico { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-4); }
+.home__eyebrow { color: var(--cor-primaria-600); font-size: var(--texto-sm); font-weight: var(--peso-forte); text-transform: uppercase; letter-spacing: .06em; }
+
 .home__diagnostico-titulo,
 .home__proximas h2 {
   font-size: var(--texto-lg);
   margin-bottom: var(--esp-3);
-  color: var(--cor-primaria-700);
+  color: var(--cor-primaria-800);
 }
+
+.home__categorias { display: flex; flex-wrap: wrap; gap: var(--esp-2); }
+.home__categoria { padding: .6rem .9rem; border-radius: var(--raio-completo); background: var(--cor-borda-suave); color: var(--cor-texto-suave); font-size: var(--texto-sm); font-weight: var(--peso-medio); }
+.home__categoria:hover { text-decoration: none; background: var(--cor-primaria-100); }
+.home__categoria--ativa { background: var(--cor-primaria-700); color: white; }
 
 .home__lista {
   list-style: none;
@@ -54,6 +107,8 @@
   display: grid;
   gap: var(--esp-2);
 }
+
+.home__diagnostico .home__lista { flex-basis: 100%; }
 
 .home__lista li {
   padding: var(--esp-2) var(--esp-3);
@@ -77,4 +132,32 @@
 .home__proximas p {
   color: var(--cor-texto-suave);
   font-size: var(--texto-sm);
+}
+
+.home__produtos {
+  padding-top: var(--esp-3);
+}
+
+.home__secao-cabecalho {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--esp-4);
+  margin-bottom: var(--esp-4);
+}
+
+.home__secao-cabecalho h2 {
+  margin-top: var(--esp-1);
+  color: var(--cor-primaria-800);
+}
+
+.home__ver-todos {
+  color: var(--cor-primaria-600);
+  font-weight: var(--peso-forte);
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .home__hero { min-height: 0; }
+  .home__beneficios { grid-template-columns: repeat(2, 1fr); }
 }

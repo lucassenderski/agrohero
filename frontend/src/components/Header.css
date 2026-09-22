@@ -4,9 +4,31 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  background-color: var(--cor-superficie);
+  background-color: rgba(255, 255, 255, 0.96);
   border-bottom: 1px solid var(--cor-borda);
   box-shadow: var(--sombra-sm);
+}
+
+.header__barra {
+  background: var(--cor-primaria-900);
+  color: var(--cor-primaria-100);
+  font-size: 0.72rem;
+}
+
+.header__barra-interna {
+  min-height: 1.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.header__barra-links {
+  display: flex;
+  gap: var(--esp-5);
+  color: var(--cor-primaria-200);
 }
 
 .header__interno {
@@ -22,7 +44,7 @@
   display: flex;
   align-items: center;
   gap: var(--esp-2);
-  color: var(--cor-primaria-700);
+  color: var(--cor-texto);
   font-weight: var(--peso-forte);
   font-size: var(--texto-lg);
 }
@@ -32,8 +54,28 @@
 }
 
 .header__logo {
-  font-size: var(--texto-xl);
+  display: grid;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 0.7rem;
+  background: var(--cor-primaria-500);
+  color: white;
+  font-size: 1.8rem;
   line-height: 1;
+}
+
+.header__nome {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.header__nome small {
+  margin-top: 0.25rem;
+  color: var(--cor-primaria-600);
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
 }
 
 .header__menu-botao {
@@ -71,9 +113,13 @@
 .header__link {
   padding: var(--esp-2) var(--esp-2);
   border-radius: var(--raio-sm);
-  color: var(--cor-texto);
+  color: var(--cor-texto-suave);
   font-size: var(--texto-sm);
   font-weight: var(--peso-medio);
+}
+
+.header__link:first-child {
+  color: var(--cor-primaria-700);
 }
 
 .header__link:hover {
@@ -122,7 +168,7 @@
     position: static;
     flex-direction: row;
     align-items: center;
-    gap: var(--esp-1);
+    gap: var(--esp-2);
     border-bottom: none;
     padding: 0;
     box-shadow: none;
@@ -138,5 +184,11 @@
     padding-top: 0;
     margin-top: 0;
     margin-left: var(--esp-2);
+  }
+}
+
+@media (max-width: 640px) {
+  .header__barra-links {
+    display: none;
   }
 }

@@ -123,11 +123,12 @@ export class UsuarioRepository extends RepositorioBase {
   }
 
   /* Troca a senha. Recebe o hash ja gerado - nunca a senha em texto puro. */
-  async atualizarSenha(id, senhaHash) {
-    const linhas = await this.executar(
-      `UPDATE usuarios SET senha_hash = $2 WHERE id = $1 RETURNING id`,
-      [id, senhaHash],
-    );
+  async atualizarSenha(id, senhaHash, cliente = null) {
+    const sql =
+      `UPDATE usuarios SET senha_hash = $2 WHERE id = $1 RETURNING id`;
+    const linhas = cliente
+      ? await this.executarCom(cliente, sql, [id, senhaHash])
+      : await this.executar(sql, [id, senhaHash]);
     return linhas[0] ?? null;
   }
 

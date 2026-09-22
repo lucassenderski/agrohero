@@ -141,4 +141,19 @@ export const loginSchema = z.object({
   senha: z.string({ required_error: 'A senha e obrigatoria.' }).min(1, 'A senha e obrigatoria.'),
 });
 
-export default { cadastroSchema, loginSchema, TIPOS_AUTOCADASTRO };
+export const solicitarRedefinicaoSchema = z.object({
+  email: emailSchema,
+});
+
+export const redefinirSenhaSchema = z.object({
+  token: z.string({ required_error: 'O token e obrigatorio.' }).trim().regex(/^[a-f0-9]{64}$/, 'Token invalido.'),
+  senha: senhaSchema,
+});
+
+export default {
+  cadastroSchema,
+  loginSchema,
+  solicitarRedefinicaoSchema,
+  redefinirSenhaSchema,
+  TIPOS_AUTOCADASTRO,
+};
