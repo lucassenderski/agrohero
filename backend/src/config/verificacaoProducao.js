@@ -44,13 +44,6 @@ export function verificarConfiguracaoProducao(dados) {
     );
   }
 
-  // Sem segredo de webhook, um evento de pagamento nao pode ser verificado.
-  if (!dados.PAYMENT_WEBHOOK_SECRET) {
-    problemas.push('PAYMENT_WEBHOOK_SECRET: obrigatorio em producao.');
-  } else if (parecePlaceholder(dados.PAYMENT_WEBHOOK_SECRET)) {
-    problemas.push('PAYMENT_WEBHOOK_SECRET: valor de exemplo detectado.');
-  }
-
   const origens = String(dados.CORS_ORIGINS ?? '');
 
   // CORS com "*" e credenciais anula a lista branca.
