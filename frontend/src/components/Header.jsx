@@ -72,6 +72,9 @@ export default function Header() {
           <Link to="/categorias" className="header__link" onClick={fecharMenu}>
             Categorias
           </Link>
+          <Link to="/receitas" className="header__link" onClick={fecharMenu}>
+            Receitas
+          </Link>
           <Link to="/agricultores" className="header__link" onClick={fecharMenu}>
             Agricultores
           </Link>
