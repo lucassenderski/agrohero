@@ -8,6 +8,7 @@ import { NotificacaoProvider } from '../contexts/NotificacaoContext.jsx';
 import { AuthProvider } from '../contexts/AuthContext.jsx';
 import { CarrinhoProvider } from '../contexts/CarrinhoContext.jsx';
 import { criarClienteLogado, criarProdutorLogado, criarProduto, removerToken } from './ajudantes.js';
+import { casarIngredientes } from '../dados/receitas.js';
 
 /*
  * Testes de integracao da pagina de receitas.
@@ -197,5 +198,60 @@ describe('Pagina de receitas', () => {
         screen.getByRole('heading', { name: /Suco Vitalidade Verde/i }),
       ).toBeInTheDocument();
     });
+  });
+});
+
+/*
+ * Testes de regressao do casamento ingrediente x produto.
+ *
+ * O defeito que originou o primeiro teste esta na comparacao de strings,
+ * nao no banco, entao este bloco nao precisa da API. O termo "mel" era
+ * comparado com `includes` e casava dentro de "Frutas VerMELhas" - a
+ * receita de sopa oferecia uma geleia no lugar do mel.
+ */
+describe('Casamento ingrediente x produto', () => {
+  it('nao casa o termo dentro de outra palavra', () => {
+    const produtos = [
+      { id: 1, nome: 'Geleia Artesanal de Frutas Vermelhas', preco: 24 },
+      { id: 2, nome: 'Mel Silvestre de Florada Nativa', preco: 38 },
+    ];
+
+    const [ingrediente] = casarIngredientes(
+      { ingredientes: [{ nome: 'Mel', termos: ['mel'] }] },
+      produtos,
+    );
+
+    expect(ingrediente.produto.nome).toBe('Mel Silvestre de Florada Nativa');
+  });
+
+  it('casa ignorando acento e caixa', () => {
+    const produtos = [{ id: 1, nome: 'Abóbora Cabotiá Orgânica', preco: 7.5 }];
+
+    const [ingrediente] = casarIngredientes(
+      { ingredientes: [{ nome: 'Abóbora', termos: ['abobora'] }] },
+      produtos,
+    );
+
+    expect(ingrediente.produto).not.toBeNull();
+  });
+
+  it('trata termo com hifen como texto, nao como padrao', () => {
+    const produtos = [{ id: 1, nome: 'Batata-Doce Roxa', preco: 8.5 }];
+
+    const [ingrediente] = casarIngredientes(
+      { ingredientes: [{ nome: 'Batata-Doce', termos: ['batata-doce'] }] },
+      produtos,
+    );
+
+    expect(ingrediente.produto).not.toBeNull();
+  });
+
+  it('devolve produto nulo quando nao ha correspondencia', () => {
+    const [ingrediente] = casarIngredientes(
+      { ingredientes: [{ nome: 'Jabuticaba', termos: ['jabuticaba'] }] },
+      [{ id: 1, nome: 'Alface Crespa', preco: 5 }],
+    );
+
+    expect(ingrediente.produto).toBeNull();
   });
 });

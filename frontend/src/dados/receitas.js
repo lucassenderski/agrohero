@@ -264,7 +264,28 @@ export function normalizarTexto(texto) {
  * correspondencia. Um mesmo produto pode servir a dois ingredientes
  * (o mel do molho e o mel do final), e isso e intencional - a lista
  * segue a ordem da receita.
+ *
+ * A comparacao e por PALAVRA INTEIRA, e nao por trecho. Com `includes`
+ * cru, o termo "mel" casava dentro de "Frutas Vermelhas" e a receita
+ * oferecia uma geleia no lugar do mel - um erro que nao aparece em
+ * produto cujo nome nao contem o termo, mas acontece sempre que um
+ * termo curto cai dentro de outra palavra. Como a receita escolhe o
+ * primeiro produto que casa, um falso positivo ainda esconde o produto
+ * certo.
  */
+const CACHE_TERMOS = new Map();
+
+function regexDoTermo(termo) {
+  const normalizado = normalizarTexto(termo);
+  if (!CACHE_TERMOS.has(normalizado)) {
+    // Escapa metacaracteres para que um termo como "batata-doce" seja
+    // tratado como texto, nao como padrao.
+    const escapado = normalizado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    CACHE_TERMOS.set(normalizado, new RegExp(`\\b${escapado}\\b`));
+  }
+  return CACHE_TERMOS.get(normalizado);
+}
+
 export function casarIngredientes(receita, produtos) {
   const lista = Array.isArray(produtos) ? produtos : [];
 
@@ -272,7 +293,7 @@ export function casarIngredientes(receita, produtos) {
     const produto =
       lista.find((item) => {
         const nome = normalizarTexto(item.nome);
-        return ingrediente.termos.some((termo) => nome.includes(normalizarTexto(termo)));
+        return ingrediente.termos.some((termo) => regexDoTermo(termo).test(nome));
       }) || null;
 
     return { ...ingrediente, produto };
