@@ -13,6 +13,7 @@
     "dev": "node --watch src/server.js",
     "migrate": "node src/database/run-migrations.js",
     "seed": "node src/database/run-seeds.js",
+    "seed:catalogo": "node src/database/catalogo-demonstrativo.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit --runInBand",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --coverage",

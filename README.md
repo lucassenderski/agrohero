@@ -125,6 +125,21 @@ Anote a senha. Ela é gerada aleatoriamente a cada ambiente e não é exibida de
 
 Ambos os comandos são seguros para rodar mais de uma vez: as migrations sabem o que já foi aplicado e os seeds não duplicam dados.
 
+### 5.1. Catálogo demonstrativo (opcional)
+
+Um banco recém-criado tem categorias, mas nenhum produto — a vitrine fica vazia e a página de receitas não tem com o que casar os ingredientes. Para popular um catálogo de demonstração:
+
+```bash
+cd backend
+npm run seed:catalogo
+```
+
+Isso cria 3 produtores de Toledo-PR e 12 produtos (hortaliças, raízes, ovos, mel e geleia), escolhidos para que os ingredientes das 6 receitas encontrem um produto na vitrine. O comando imprime uma vez o e-mail das 3 contas de demonstração e a senha, igual ao administrador.
+
+O script é idempotente: rodar de novo não duplica produtor nem produto, e **não sobrescreve** preço ou estoque de produto que já existe.
+
+> **Não é para produção.** Os dados são fictícios. Por isso este seed **não** fica na pasta `seeds/`, que roda automaticamente no `npm run seed` — e no plano gratuito do Render o seed é encadeado no `startCommand`, então o que está em `seeds/` pode acabar gravado no banco de produção. Quem decide rodar o catálogo demonstrativo é uma pessoa, com o comando acima.
+
 ### 6.1. Banco de testes
 
 Os testes de integração usam um banco separado e descartável:
@@ -513,6 +528,7 @@ testes negativos — o que importa é o que o sistema **recusa**:
 | `docker compose down -v` | raiz | Para e **apaga** os dados |
 | `npm run migrate` | backend | Aplica as migrations pendentes |
 | `npm run seed` | backend | Cria categorias e o administrador |
+| `npm run seed:catalogo` | backend | Catálogo demonstrativo (não usar em produção) |
 | `npm run dev` | backend | API com reload automático |
 | `npm test` | backend | Testes de integração |
 | `npm run dev` | frontend | Interface em desenvolvimento |

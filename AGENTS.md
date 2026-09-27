@@ -27,6 +27,7 @@ O PostgreSQL é publicado na **porta 5433** (não 5432) para não conflitar com 
 |---|---|---|
 | `npm run migrate` | backend | Aplica migrations pendentes (idempotente) |
 | `npm run seed` | backend | Categorias + admin (idempotente) |
+| `npm run seed:catalogo` | backend | Catalogo demonstrativo: 3 produtores e 12 produtos (idempotente, nunca em producao) |
 | `npm test` | backend | Testes de integração (recriam o schema do zero) |
 | `npm run dev` | backend | API com reload |
 | `npm run dev` / `build` | frontend | Vite |
@@ -108,6 +109,10 @@ Suíte de testes: 591 no backend (21 suítes) e 32 no frontend (5 suítes), todo
 **O painel do Render diz o deploy disparado, não o que está no ar.** Um deploy que falha não derruba o anterior: a versão antiga continua servindo, e o painel ainda exibe o commit novo como mais recente. A conferência confiável é o artefato - o Vite nomeia os arquivos por hash de conteúdo, então reconstruir o commit candidato com o mesmo `VITE_API_URL` de produção e comparar os nomes de `dist/assets` com os que o site serve prova qual commit está publicado. Pelo mesmo motivo, rollback não é ajustar código: é **Redeploy** do commit bom no painel, ou `git revert` (não `reset --hard`, que exigiria `--force` e apagaria o commit do servidor).
 
 **`sync: false` no `render.yaml` significa "valor só no painel", e o painel pode guardar o espaço reservado.** O `CORS_ORIGINS` foi criado com o `https://exemplo.com` que a própria seção 3 do `docs/DEPLOY.md` manda usar na primeira implantação, e nunca voltou a ser corrigido. Resultado: a API rejeitava com `403 CORS_BLOQUEADO` até a origem do próprio frontend, e a vitrine publicada ficava em "Não foi possível falar com o servidor" - um erro de configuração, não de código, que nenhum teste local pega (o `.env` local tem a origem certa). Ao publicar, revisar todas as variáveis `sync: false`.
+
+**Casamento de ingrediente por `includes` casava dentro de outra palavra.** A receita compara o termo do ingrediente com o nome do produto, e o termo `mel` casava em "Frutas Ver**mel**has" - a receita de sopa oferecia uma geleia no lugar do mel. Como `casarIngredientes` devolve o **primeiro** produto que casa, um falso positivo ainda esconde o produto certo. A comparacao e por palavra inteira (regex com `\b`), em `frontend/src/dados/receitas.js`. Cuidado com termos curtos (mel, ovo, sal) em nome de produto.
+
+**A suite do frontend e instavel por concorrencia, nao por causa do seu codigo.** `npx vitest run` falha de forma intermitente (~1 em 4 rodadas) em `painelConsumidor.teste.jsx`, no teste `remove um endereco nao principal...`, com "Unable to find an element with the text: Endereco Antigo". Isolado o arquivo, passa sempre; com a suite inteira em paralelo, as vezes nao. Verificado: acontece **2 de 6 rodadas mesmo com a arvore limpa**, sem nenhuma alteracao. Antes de atribuir uma falha dessas a sua mudanca, confine: rode o arquivo isolado e rode a suite com `git stash`. Se a contagem de testes que falham nao tem relacao com os arquivos que voce tocou, nao e seu.
 
 **Zod descarta campo não declarado, em silêncio.** Um campo ausente do schema é removido sem erro. Foi a causa de um bug: `perfilAgricultorSchema` não declarava `cidade`/`estado`, então o perfil do produtor era gravado sem localização. Ao adicionar campo a um objeto aninhado, conferir se o schema o declara.
 
