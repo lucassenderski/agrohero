@@ -63,6 +63,24 @@ export const listarPedidosQuerySchema = z.object({
   limite: z.coerce.number().int().positive().max(100).optional(),
 });
 
+/*
+ * Confirmacao de recebimento do pagamento (agricultor).
+ *
+ * O corpo e vazio DE PROPOSITO. A rota nao aceita status, valor nem
+ * agricultor:
+ *   - o status so pode ser um (PAGO) e vem do codigo, nao do cliente;
+ *   - o valor foi decidido no checkout a partir do banco;
+ *   - o agricultor vem do token, nunca do corpo.
+ *
+ * Aceitar qualquer um dos tres transformaria a rota num caminho para um
+ * produtor marcar como pago o pedido de outro, ou dar baixa num valor
+ * que nao recebeu. Um schema que nao declara campo nenhum nao tem essa
+ * porta.
+ */
+export const confirmarPagamentoParamSchema = z.object({
+  id: idParametro,
+});
+
 /* Filtro administrativo: permite tambem filtrar por consumidor. */
 export const listarTodosQuerySchema = listarPedidosQuerySchema.extend({
   consumidorId: idParametro.optional(),
@@ -86,6 +104,7 @@ export default {
   statusItemParamSchema,
   alterarStatusItemSchema,
   alterarStatusPedidoAdminSchema,
+  confirmarPagamentoParamSchema,
   listarPedidosQuerySchema,
   listarTodosQuerySchema,
   STATUS_PEDIDO,

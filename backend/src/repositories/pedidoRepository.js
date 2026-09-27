@@ -132,77 +132,147 @@ export class PedidoRepository extends RepositorioBase {
     return linhas;
   }
 
-  /* Registra o pagamento do pedido. */
-  async criarPagamento(cliente, { pedidoId, metodo, status, valor, identificadorExterno, resumo }) {
+  /*
+   * Registra o pagamento de UM PRODUTOR no pedido.
+   *
+   * O pagamento e por (pedido, agricultor), e nao do pedido inteiro: um
+   * pedido pode ter itens de varios produtores, e cada um recebe o seu
+   * na retirada. Sem essa granularidade, "quem confirma o recebimento?"
+   * nao teria resposta.
+   *
+   * Nasce PENDENTE - a receber no local - e so muda por acao do proprio
+   * produtor (rota de confirmacao).
+   */
+  async criarPagamento(cliente, { pedidoId, agricultorId, metodo, valor, status = 'PENDENTE' }) {
     const linhas = await this.executarCom(
       cliente,
-      `INSERT INTO pagamentos
-         (pedido_id, metodo, status, valor, identificador_externo, resumo_gateway)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, pedido_id, metodo, status, valor, identificador_externo, criado_em`,
-      [pedidoId, metodo, status, valor, identificadorExterno, JSON.stringify(resumo ?? {})],
+      `INSERT INTO pagamentos (pedido_id, agricultor_id, metodo, status, valor)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, pedido_id, agricultor_id, metodo, status, valor, criado_em`,
+      [pedidoId, agricultorId, metodo, status, valor],
     );
 
     return linhas[0];
   }
 
   /*
-   * Atualiza o status do pagamento (ex.: webhook confirmando o PIX).
+   * Atualiza o status de um pagamento.
    *
-   * `identificador_externo` tambem e gravado aqui: e o id da transacao no
-   * gateway, e sem ele nao ha como reconciliar um webhook depois. O
-   * COALESCE preserva um valor ja existente quando a atualizacao nao traz
-   * um novo.
+   * Só o status: o valor e o metodo foram decididos no checkout a partir
+   * do banco e nao mudam depois. Aceitar um valor novo aqui abriria a
+   * porta para um pagamento divergir do pedido.
    */
-  async atualizarPagamento(pagamentoId, { status, resumo, identificadorExterno }) {
+  async atualizarPagamento(pagamentoId, { status }) {
     const linhas = await this.executar(
-      `UPDATE pagamentos
-          SET status = $2,
-              resumo_gateway = COALESCE($3, resumo_gateway),
-              identificador_externo = COALESCE($4, identificador_externo)
+      `UPDATE pagamentos SET status = $2
         WHERE id = $1
-      RETURNING id, pedido_id, metodo, status, valor, identificador_externo`,
-      [
-        pagamentoId,
-        status,
-        resumo ? JSON.stringify(resumo) : null,
-        identificadorExterno ?? null,
-      ],
+      RETURNING id, pedido_id, agricultor_id, metodo, status, valor`,
+      [pagamentoId, status],
     );
 
     return linhas[0] ?? null;
   }
 
   /*
-   * Busca um pagamento pelo identificador do gateway (uso em webhook).
+   * Busca o pagamento de um produtor num pedido.
    *
-   * Comparacao por texto e nao por inteiro: `identificador_externo` e
-   * VARCHAR porque cada gateway usa um formato proprio (o Mercado Pago
-   * usa um numero, o fake usa "FAKE-<timestamp>-<sufixo>"). Converter
-   * para inteiro quebraria o fake.
+   * E a consulta da confirmacao de recebimento. O par (pedido_id,
+   * agricultor_id) e unico no banco, entao a busca sempre devolve no
+   * maximo uma linha - e o produtor nunca alcanca o pagamento de outro,
+   * porque o agricultor_id vem do token dele, nao da URL.
    */
-  async buscarPagamentoPorIdentificador(identificadorExterno) {
+  async buscarPagamentoDoAgricultor(pedidoId, agricultorId) {
     return this.buscarUm(
-      `SELECT id, pedido_id, metodo, status, valor, identificador_externo
-         FROM pagamentos WHERE identificador_externo = $1`,
-      [identificadorExterno],
+      `SELECT id, pedido_id, agricultor_id, metodo, status, valor, criado_em, atualizado_em
+         FROM pagamentos
+        WHERE pedido_id = $1 AND agricultor_id = $2`,
+      [pedidoId, agricultorId],
     );
   }
 
   /*
-   * Busca o pagamento mais recente de um pedido (uso em webhook).
+   * Marca como CANCELADO todo pagamento ainda PENDENTE do pedido.
    *
-   * "Mais recente" porque um pedido pode ter mais de uma tentativa: a
-   * primeira recusada, a segunda aprovada. Ordenar por `id DESC` e mais
-   * preciso que `criado_em DESC` - dois pagamentos criados no mesmo
-   * milissegundo teriam o mesmo timestamp, e a ordem ficaria indefinida.
+   * Usado quando o pedido e cancelado. `WHERE status = 'PENDENTE'` e
+   * deliberado: um pagamento ja PAGO nao vira CANCELADO por um UPDATE
+   * silencioso. Dinheiro que ja trocou de mao e um fato, e apaga-lo no
+   * banco nao o devolve - a rota de cancelamento trata esse caso.
    */
-  async buscarPagamentoPorPedido(pedidoId) {
-    return this.buscarUm(
-      `SELECT id, pedido_id, metodo, status, valor, identificador_externo
-         FROM pagamentos WHERE pedido_id = $1 ORDER BY id DESC LIMIT 1`,
+  async cancelarPagamentosPendentes(cliente, pedidoId) {
+    const linhas = await this.executarCom(
+      cliente,
+      `UPDATE pagamentos SET status = 'CANCELADO'
+        WHERE pedido_id = $1 AND status = 'PENDENTE'
+      RETURNING id, agricultor_id`,
       [pedidoId],
     );
+
+    return linhas;
+  }
+
+  /*
+   * Marca um pagamento PENDENTE como PAGO.
+   *
+   * O `AND status = 'PENDENTE'` no WHERE e o que torna a confirmacao
+   * idempotente e segura sob concorrencia: dois toques no botao, ou duas
+   * abas abertas, chegam como dois UPDATEs, e apenas o primeiro encontra
+   * a linha PENDENTE. O segundo nao altera nada e o service responde
+   * "ja estava pago" em vez de dar baixa duas vezes.
+   *
+   * Devolve null quando nada foi atualizado - e essa ausencia de linha,
+   * e nao um erro, que informa o estado ao chamador.
+   */
+  async marcarPagamentoComoPago(pagamentoId) {
+    const linhas = await this.executar(
+      `UPDATE pagamentos SET status = 'PAGO'
+        WHERE id = $1 AND status = 'PENDENTE'
+      RETURNING id, pedido_id, agricultor_id, metodo, status, valor, atualizado_em`,
+      [pagamentoId],
+    );
+
+    return linhas[0] ?? null;
+  }
+
+  /*
+   * Ajusta o valor do pagamento PENDENTE de um produtor (delta em reais).
+   *
+   * Usado quando o produtor cancela um item proprio: o que ele tem a
+   * receber cai pelo subtotal do item que nao sera entregue.
+   *
+   * TRES GUARDAS, cada uma contra um erro concreto:
+   *   - `status = 'PENDENTE'`: se ja foi recebido, nao se mexe. O acerto
+   *     de um valor ja pago e presencial.
+   *   - `valor + $3 > 0`: o banco tem CHECK(valor > 0). Sem esta guarda,
+   *     cancelar o unico item deixaria o pagamento em zero e o UPDATE
+   *     estouraria o CHECK - virando erro 500 num fluxo legitimo. Com
+   *     ela, o UPDATE simplesmente nao casa e a linha fica como esta.
+   *   - GREATEST evita passar por zero por um arredondamento de centavo.
+   */
+  async ajustarPagamentoDoAgricultor(cliente, pedidoId, agricultorId, delta) {
+    const linhas = await this.executarCom(
+      cliente,
+      `UPDATE pagamentos
+          SET valor = GREATEST(valor + $3, 0.01)
+        WHERE pedido_id = $1
+          AND agricultor_id = $2
+          AND status = 'PENDENTE'
+          AND valor + $3 > 0
+      RETURNING id, valor`,
+      [pedidoId, agricultorId, delta],
+    );
+
+    return linhas[0] ?? null;
+  }
+
+  /* Pagamentos ja recebidos de um pedido (para o cancelamento avisar). */
+  async contarPagamentosPagos(pedidoId) {
+    const linha = await this.buscarUm(
+      `SELECT count(*)::int AS total FROM pagamentos
+        WHERE pedido_id = $1 AND status = 'PAGO'`,
+      [pedidoId],
+    );
+
+    return linha?.total ?? 0;
   }
 
   /*
@@ -222,6 +292,58 @@ export class PedidoRepository extends RepositorioBase {
     );
 
     return linhas.length;
+  }
+
+  /*
+   * E-mails dos produtores que venderam neste pedido, com os itens de
+   * cada um.
+   *
+   * Roda FORA da transacao do checkout, de proposito: o e-mail e efeito
+   * colateral posterior ao commit, e segurar o lock do estoque durante
+   * uma chamada de rede (Resend) seria caro. Se o processo cair entre o
+   * commit e o envio, o pedido existe e o produtor ve o item no painel -
+   * perder o aviso e ruim, perder o pedido seria pior.
+   */
+  async listarProdutoresParaNotificar(pedidoId) {
+    const linhas = await this.executar(
+      `SELECT
+         a.id            AS agricultor_id,
+         a.nome_fazenda,
+         u.email         AS email,
+         pi.produto_id,
+         p.nome,
+         pi.quantidade,
+         pi.subtotal
+       FROM pedido_itens pi
+       JOIN agricultores a ON a.id = pi.agricultor_id
+       JOIN usuarios u     ON u.id = a.usuario_id
+       JOIN produtos p     ON p.id = pi.produto_id
+       WHERE pi.pedido_id = $1
+       ORDER BY pi.id`,
+      [pedidoId],
+    );
+
+    const porAgricultor = new Map();
+
+    for (const linha of linhas) {
+      if (!porAgricultor.has(linha.agricultor_id)) {
+        porAgricultor.set(linha.agricultor_id, {
+          agricultor_id: linha.agricultor_id,
+          nome_fazenda: linha.nome_fazenda,
+          email: linha.email,
+          itens: [],
+        });
+      }
+
+      porAgricultor.get(linha.agricultor_id).itens.push({
+        produto_id: linha.produto_id,
+        nome: linha.nome,
+        quantidade: linha.quantidade,
+        subtotal: Number(linha.subtotal),
+      });
+    }
+
+    return [...porAgricultor.values()];
   }
 
   /* Busca um pedido pelo id (sem checagem de dono - o service faz isso). */
@@ -257,11 +379,42 @@ export class PedidoRepository extends RepositorioBase {
     );
   }
 
-  /* Pagamentos de um pedido. */
+  /*
+   * Pagamentos de um pedido, um por produtor.
+   *
+   * O JOIN com agricultores traz o nome da fazenda: com varios
+   * produtores no mesmo pedido, so o metodo e o valor nao dizem a quem
+   * cada linha se refere - nem para o cliente, nem para o admin.
+   */
   async listarPagamentos(pedidoId) {
     return this.executar(
-      `SELECT id, metodo, status, valor, identificador_externo, criado_em
-         FROM pagamentos WHERE pedido_id = $1 ORDER BY criado_em DESC`,
+      `SELECT pg.id, pg.pedido_id, pg.agricultor_id, pg.metodo, pg.status,
+              pg.valor, pg.criado_em, pg.atualizado_em,
+              a.nome_fazenda
+         FROM pagamentos pg
+         JOIN agricultores a ON a.id = pg.agricultor_id
+        WHERE pg.pedido_id = $1
+        ORDER BY pg.id`,
+      [pedidoId],
+    );
+  }
+
+  /*
+   * Agregado dos pagamentos de um pedido, por status.
+   *
+   * Serve para responder "este pedido ja foi todo pago?" sem trazer as
+   * linhas. Contar no banco evita que a resposta dependa de o chamador
+   * somar certo.
+   */
+  async resumoPagamentosDoPedido(pedidoId) {
+    return this.buscarUm(
+      `SELECT
+         count(*)::int                                      AS total,
+         count(*) FILTER (WHERE status = 'PAGO')::int       AS pagos,
+         count(*) FILTER (WHERE status = 'PENDENTE')::int   AS pendentes,
+         coalesce(sum(valor) FILTER (WHERE status = 'PAGO'), 0)::numeric(10,2) AS valor_pago,
+         coalesce(sum(valor), 0)::numeric(10,2)             AS valor_total
+       FROM pagamentos WHERE pedido_id = $1`,
       [pedidoId],
     );
   }
@@ -315,10 +468,17 @@ export class PedidoRepository extends RepositorioBase {
          p.nome AS produto_nome, p.unidade, p.imagem_url,
          pe.status AS pedido_status,
          pe.criado_em AS pedido_criado_em,
-         pe.endereco_entrega
+         pe.endereco_entrega,
+         pg.id     AS pagamento_id,
+         pg.status AS pagamento_status,
+         pg.metodo AS pagamento_metodo,
+         pg.valor  AS pagamento_valor
        FROM pedido_itens pi
        JOIN pedidos pe  ON pe.id = pi.pedido_id
        JOIN produtos p  ON p.id = pi.produto_id
+       LEFT JOIN pagamentos pg
+              ON pg.pedido_id = pi.pedido_id
+             AND pg.agricultor_id = pi.agricultor_id
        ${onde}
       ORDER BY pi.criado_em DESC
       LIMIT $${parametros.length + 1} OFFSET $${parametros.length + 2}`,
