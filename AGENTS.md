@@ -101,7 +101,13 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
 Suíte de testes: 591 no backend (21 suítes) e 32 no frontend (5 suítes), todos passando.
 
+**Produção.** `agrohero-api` e `agrohero-web` no Render, servidos a partir deste repositório. Em 2026-09-21 o commit no ar é `c2a97a3`, marcado pela tag `v1.0.0-producao`. Conferência de qual commit está servido e o rollback estão na seção 9 de `docs/DEPLOY.md`.
+
 ## Armadilhas já encontradas (não repetir)
+
+**O painel do Render diz o deploy disparado, não o que está no ar.** Um deploy que falha não derruba o anterior: a versão antiga continua servindo, e o painel ainda exibe o commit novo como mais recente. A conferência confiável é o artefato - o Vite nomeia os arquivos por hash de conteúdo, então reconstruir o commit candidato com o mesmo `VITE_API_URL` de produção e comparar os nomes de `dist/assets` com os que o site serve prova qual commit está publicado. Pelo mesmo motivo, rollback não é ajustar código: é **Redeploy** do commit bom no painel, ou `git revert` (não `reset --hard`, que exigiria `--force` e apagaria o commit do servidor).
+
+**`sync: false` no `render.yaml` significa "valor só no painel", e o painel pode guardar o espaço reservado.** O `CORS_ORIGINS` foi criado com o `https://exemplo.com` que a própria seção 3 do `docs/DEPLOY.md` manda usar na primeira implantação, e nunca voltou a ser corrigido. Resultado: a API rejeitava com `403 CORS_BLOQUEADO` até a origem do próprio frontend, e a vitrine publicada ficava em "Não foi possível falar com o servidor" - um erro de configuração, não de código, que nenhum teste local pega (o `.env` local tem a origem certa). Ao publicar, revisar todas as variáveis `sync: false`.
 
 **Zod descarta campo não declarado, em silêncio.** Um campo ausente do schema é removido sem erro. Foi a causa de um bug: `perfilAgricultorSchema` não declarava `cidade`/`estado`, então o perfil do produtor era gravado sem localização. Ao adicionar campo a um objeto aninhado, conferir se o schema o declara.
 
