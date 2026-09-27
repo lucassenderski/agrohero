@@ -18,7 +18,6 @@ import {
 function configuracaoSegura(alteracoes = {}) {
   return {
     JWT_SECRET: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6',
-    PAYMENT_WEBHOOK_SECRET: 'f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3',
     CORS_ORIGINS: 'https://agrohero.app',
     ...alteracoes,
   };
@@ -62,24 +61,6 @@ describe('verificarConfiguracaoProducao', () => {
     expect(problemas[0]).toMatch(/JWT_SECRET/);
   });
 
-  test('PAYMENT_WEBHOOK_SECRET ausente e recusado', () => {
-    const problemas = verificarConfiguracaoProducao(
-      configuracaoSegura({ PAYMENT_WEBHOOK_SECRET: '' }),
-    );
-
-    expect(problemas).toHaveLength(1);
-    expect(problemas[0]).toMatch(/obrigatorio/i);
-  });
-
-  test('PAYMENT_WEBHOOK_SECRET de exemplo e recusado', () => {
-    const problemas = verificarConfiguracaoProducao(
-      configuracaoSegura({ PAYMENT_WEBHOOK_SECRET: 'troque-por-um-segredo-aleatorio' }),
-    );
-
-    expect(problemas).toHaveLength(1);
-    expect(problemas[0]).toMatch(/PAYMENT_WEBHOOK_SECRET/);
-  });
-
   test('CORS com wildcard e recusado', () => {
     const problemas = verificarConfiguracaoProducao(
       configuracaoSegura({ CORS_ORIGINS: '*' }),
@@ -114,11 +95,10 @@ describe('verificarConfiguracaoProducao', () => {
     // todos os erros de configuracao.
     const problemas = verificarConfiguracaoProducao({
       JWT_SECRET: 'troque_isto',
-      PAYMENT_WEBHOOK_SECRET: '',
       CORS_ORIGINS: '*',
     });
 
-    expect(problemas).toHaveLength(3);
+    expect(problemas).toHaveLength(2);
   });
 
   test('aceita multiplas origens https legitimas', () => {

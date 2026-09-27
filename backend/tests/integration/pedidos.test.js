@@ -1051,3 +1051,158 @@ describe('visao administrativa', () => {
   });
 });
 
+/* ---------------------------------------------------------------- */
+/* Confirmacao de pagamento na retirada                              */
+/* ---------------------------------------------------------------- */
+
+/*
+ * Quem confirma o pagamento e quem RECEBE: o produtor, pelo token.
+ *
+ * Dois riscos concentram estes testes:
+ *
+ * 1) O produtor A confirmar o pagamento do produtor B no mesmo pedido.
+ *    Como a confirmacao muda um estado financeiro, isso e a versao
+ *    financeira do vazamento multi-produtor.
+ *
+ * 2) Confirmar duas vezes. Um duplo clique nao pode virar erro nem, pior,
+ *    dar baixa duas vezes. A operacao precisa ser idempotente.
+ */
+describe('confirmacao de pagamento na retirada', () => {
+  /* Confirma o recebimento do produtor dono do pagamento. */
+  function confirmar(pedidoId, token = tokenAgricultorA) {
+    return request(app)
+      .patch(`${PEDIDOS}/${pedidoId}/pagamento/confirmar`)
+      .set(auth(token));
+  }
+
+  async function pagamentoDe(pedidoId, agricultorId) {
+    const { rows } = await pool.query(
+      `SELECT id, status, valor FROM pagamentos
+        WHERE pedido_id = $1 AND agricultor_id = $2`,
+      [pedidoId, agricultorId],
+    );
+    return rows[0] ?? null;
+  }
+
+  test('o produtor confirma e o pagamento vira PAGO', async () => {
+    const pedido = await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+
+    expect((await pagamentoDe(pedido.pedido.id, idAgricultorA)).status).toBe('PENDENTE');
+
+    const resposta = await confirmar(pedido.pedido.id).expect(200);
+
+    expect(resposta.body.dados.pagamento.status).toBe('PAGO');
+    expect(resposta.body.dados.ja_estava_pago).toBe(false);
+    expect((await pagamentoDe(pedido.pedido.id, idAgricultorA)).status).toBe('PAGO');
+  });
+
+  test('confirmar de novo e idempotente, sem erro e sem mudar nada', async () => {
+    const pedido = await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+
+    await confirmar(pedido.pedido.id).expect(200);
+
+    const resposta = await confirmar(pedido.pedido.id).expect(200);
+
+    expect(resposta.body.dados.ja_estava_pago).toBe(true);
+    expect(resposta.body.dados.pagamento.status).toBe('PAGO');
+  });
+
+  test('token de consumidor nao confirma (403)', async () => {
+    const pedido = await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+
+    await confirmar(pedido.pedido.id, tokenCliente).expect(403);
+  });
+
+  test('sem token devolve 401', async () => {
+    const pedido = await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+
+    await request(app)
+      .patch(`${PEDIDOS}/${pedido.pedido.id}/pagamento/confirmar`)
+      .expect(401);
+  });
+
+  /*
+   * O produtor B nao tem pagamento neste pedido (so o A vendeu). Ele
+   * recebe 404, e nao "confirmei o pagamento do A" - a consulta e por
+   * (pedido, agricultor), entao nao existe linha para ele.
+   */
+  test('produtor sem pagamento no pedido devolve 404', async () => {
+    const pedido = await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+
+    await confirmar(pedido.pedido.id, tokenAgricultorB).expect(404);
+
+    expect((await pagamentoDe(pedido.pedido.id, idAgricultorA)).status).toBe('PENDENTE');
+  });
+
+  /*
+   * Em um pedido com os dois produtores, cada um confirma o SEU. A
+   * confirmacao do A nao pode tocar o pagamento do B.
+   */
+  test('num pedido com dois produtores, cada um confirma o proprio', async () => {
+    const pedido = await criarPedido([
+      { produto_id: idProdutoA, quantidade: 1 },
+      { produto_id: idProdutoB, quantidade: 1 },
+    ]);
+
+    const respostaA = await confirmar(pedido.pedido.id, tokenAgricultorA).expect(200);
+
+    expect(respostaA.body.dados.pagamento.status).toBe('PAGO');
+    /* O do B continua pendente. */
+    expect((await pagamentoDe(pedido.pedido.id, idAgricultorB)).status).toBe('PENDENTE');
+    /* E o agregado mostra 1 de 2. */
+    expect(respostaA.body.dados.pedido_pagamento).toEqual({
+      pagamentos: 2,
+      pagos: 1,
+      todos_pagos: false,
+    });
+
+    const respostaB = await confirmar(pedido.pedido.id, tokenAgricultorB).expect(200);
+
+    expect(respostaB.body.dados.pedido_pagamento).toEqual({
+      pagamentos: 2,
+      pagos: 2,
+      todos_pagos: true,
+    });
+  });
+
+  test('pedido inexistente devolve 404', async () => {
+    await confirmar(999999).expect(404);
+  });
+
+  /*
+   * Pedido cancelado nao tem o que receber. Dar baixa aqui registraria
+   * dinheiro que nunca foi entregue.
+   */
+  test('pedido cancelado devolve 422 e nao da baixa', async () => {
+    const pedido = await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+
+    await request(app)
+      .patch(`${PEDIDOS}/${pedido.pedido.id}/cancelar`)
+      .set(auth(tokenCliente))
+      .expect(200);
+
+    await confirmar(pedido.pedido.id).expect(422);
+
+    const pagamento = await pagamentoDe(pedido.pedido.id, idAgricultorA);
+    expect(pagamento.status).not.toBe('PAGO');
+  });
+
+  /*
+   * O corpo e ignorado: o valor vem do checkout, nunca do cliente. Um
+   * produtor tentando "confirmar por R$ 1.000" nao muda o registro.
+   */
+  test('o corpo da requisicao nao altera o valor pago', async () => {
+    const pedido = await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+    const antes = await pagamentoDe(pedido.pedido.id, idAgricultorA);
+
+    await request(app)
+      .patch(`${PEDIDOS}/${pedido.pedido.id}/pagamento/confirmar`)
+      .set(auth(tokenAgricultorA))
+      .send({ valor: 1000, status: 'PAGO' })
+      .expect(200);
+
+    const depois = await pagamentoDe(pedido.pedido.id, idAgricultorA);
+    expect(Number(depois.valor)).toBe(Number(antes.valor));
+  });
+});
+

@@ -795,21 +795,53 @@ describe('POST /checkout/preview', () => {
 /* ---------------------------------------------------------------- */
 
 describe('pagamento no checkout', () => {
-  test('PIX e aprovado pelo gateway simulado', async () => {
+  /*
+   * O checkout NAO cobra nada. Ele apenas registra quanto cada produtor
+   * tem a receber na retirada, e sempre com status PENDENTE - nao ha
+   * gateway para aprovar, recusar ou deixar em analise.
+   *
+   * O metodo escolhido aqui e uma INTENCAO do cliente (como ele pretende
+   * pagar), nao uma transacao. O pagamento real acontece no balcao.
+   */
+  test('o pagamento nasce PENDENTE, sem gateway para aprovar', async () => {
     await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
 
     const resposta = await finalizar({ endereco_id: idEndereco, metodo_pagamento: 'PIX' }).expect(201);
 
-    expect(resposta.body.dados.pagamento.status).toBe('APROVADO');
+    expect(resposta.body.dados.pagamentos).toHaveLength(1);
+    expect(resposta.body.dados.pagamentos[0].status).toBe('PENDENTE');
+    expect(resposta.body.dados.pagamento_resumo.status).toBe('PENDENTE');
+  });
+
+  test('PIX, cartao e dinheiro sao aceitos como forma declarada', async () => {
+    for (const metodo of ['PIX', 'CARTAO', 'DINHEIRO']) {
+      await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
+
+      const resposta = await finalizar({
+        endereco_id: idEndereco,
+        metodo_pagamento: metodo,
+      }).expect(201);
+
+      expect(resposta.body.dados.pagamentos[0].metodo).toBe(metodo);
+    }
+  });
+
+  /* BOLETO existia no gateway e nao faz sentido no balcao. */
+  test('boleto e recusado: nao se compensa na retirada', async () => {
+    await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
+
+    await finalizar({ endereco_id: idEndereco, metodo_pagamento: 'BOLETO' }).expect(400);
+
+    expect(await contar('pagamentos')).toBe(0);
   });
 
   /*
-   * O gateway simulado recusa valores terminados em ,13. O pedido
-   * continua existindo com o pagamento RECUSADO - nao e um erro de
-   * checkout, e um pagamento que nao passou.
+   * Nao existe mais recusa: o valor do pedido nao muda o resultado. Antes
+   * o gateway recusava valores terminados em ,13 e deixava ,99 pendente.
+   * Este teste trava o comportamento novo - qualquer valor termina
+   * PENDENTE, porque a decisao nao e do servidor.
    */
-  test('valor terminado em ,13 e recusado mas o pedido existe', async () => {
-    /* Frete mesmo-cidade 4.95 + 13.18 = 18.13 (termina em ,13). */
+  test('o valor nao altera o status: nao ha gateway para recusar', async () => {
     await pool.query('UPDATE produtos SET preco = 13.18 WHERE id = $1', [idProduto]);
 
     await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
@@ -819,73 +851,71 @@ describe('pagamento no checkout', () => {
       metodo_pagamento: 'CARTAO',
     }).expect(201);
 
-    expect(resposta.body.dados.pagamento.status).toBe('RECUSADO');
-
-    expect(await contar('pedidos')).toBe(1);
-
-    const { rows } = await pool.query('SELECT status FROM pagamentos');
-    expect(rows[0].status).toBe('RECUSADO');
-  });
-
-  test('valor terminado em ,99 fica pendente', async () => {
-    /* Frete mesmo-cidade 4.95 + 10.04 = 14.99 (termina em ,99). */
-    await pool.query('UPDATE produtos SET preco = 10.04 WHERE id = $1', [idProduto]);
-
-    await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
-
-    const resposta = await finalizar({
-      endereco_id: idEndereco,
-      metodo_pagamento: 'PIX',
-    }).expect(201);
-
-    expect(resposta.body.dados.pagamento.status).toBe('PENDENTE');
-  });
-
-  test('o pagamento e gravado com o valor total do pedido', async () => {
-    await encherCarrinho([{ produto_id: idProduto, quantidade: 2 }]);
-
-    await finalizar({ endereco_id: idEndereco, metodo_pagamento: 'PIX' }).expect(201);
-
-    const { rows } = await pool.query('SELECT valor, metodo FROM pagamentos');
-    expect(Number(rows[0].valor)).toBe(21.95);
-    expect(rows[0].metodo).toBe('PIX');
+    expect(resposta.body.dados.pagamentos[0].status).toBe('PENDENTE');
   });
 
   /*
-   * O identificador do gateway precisa ser GRAVADO, nao apenas devolvido.
-   *
-   * Sem ele, um webhook posterior (PIX confirmado) nao teria como
-   * encontrar o pagamento: `buscarPagamentoPorIdentificador` nao acharia
-   * nada e o pedido ficaria pendente para sempre.
-   *
-   * Este teste nasceu de um bug real encontrado na validacao manual: o
-   * checkout devolvia o identificador na resposta, mas o UPDATE so
-   * gravava status e resumo.
+   * O pagamento guarda o valor que AQUELE produtor recebe - nao o total
+   * do pedido. Com dois produtores, cada um recebe a sua parte mais a
+   * fatia de frete, e a soma fecha com o total.
    */
-  test('grava o identificador externo da transacao', async () => {
-    await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
+  test('cada produtor tem o proprio pagamento, e a soma fecha com o total', async () => {
+    const { rows: u } = await pool.query(`
+      INSERT INTO usuarios (nome, email, senha_hash, tipo)
+      VALUES ('Produtor B', 'pb@teste.local', '$2b$12$hash', 'agricultor') RETURNING id
+    `);
+    const { rows: agri } = await pool.query(
+      `INSERT INTO agricultores (usuario_id, nome_fazenda, cidade, estado)
+       VALUES ($1, 'Fazenda B', 'Campinas', 'SP') RETURNING id`,
+      [u[0].id],
+    );
+    const { rows: cat } = await pool.query('SELECT id FROM categorias LIMIT 1');
+    const { rows: p } = await pool.query(
+      `INSERT INTO produtos (agricultor_id, categoria_id, nome, preco, estoque)
+       VALUES ($1, $2, 'Ovos', 12.00, 30) RETURNING id`,
+      [agri[0].id, cat[0].id],
+    );
+
+    await encherCarrinho([
+      { produto_id: idProduto, quantidade: 1 },
+      { produto_id: p[0].id, quantidade: 2 },
+    ]);
+
+    const resposta = await finalizar({ endereco_id: idEndereco, metodo_pagamento: 'PIX' }).expect(201);
+
+    const pagamentos = resposta.body.dados.pagamentos;
+    expect(pagamentos).toHaveLength(2);
+
+    const totalPedido = resposta.body.dados.pedido.valor_total;
+    const somaPagamentos = pagamentos.reduce((soma, pg) => soma + pg.valor, 0);
+
+    /* O rateio do frete nao pode criar nem sumir um centavo. */
+    expect(Number(somaPagamentos.toFixed(2))).toBe(Number(totalPedido));
+  });
+
+  /* Um produtor nao pode ter dois pagamentos no mesmo pedido. */
+  test('ha no maximo um pagamento por produtor no pedido', async () => {
+    await encherCarrinho([
+      { produto_id: idProduto, quantidade: 1 },
+      { produto_id: idProdutoCaro, quantidade: 1 },
+    ]);
 
     await finalizar({ endereco_id: idEndereco, metodo_pagamento: 'PIX' }).expect(201);
 
     const { rows } = await pool.query(
-      'SELECT identificador_externo FROM pagamentos',
+      `SELECT agricultor_id, count(*)::int AS n
+         FROM pagamentos GROUP BY agricultor_id`,
     );
 
-    expect(rows[0].identificador_externo).toBeTruthy();
-    expect(rows[0].identificador_externo).toMatch(/^FAKE-/);
-
-    /* E o pagamento precisa ser localizavel por ele. */
-    const encontrado = await pedidoRepository.buscarPagamentoPorIdentificador(
-      rows[0].identificador_externo,
-    );
-
-    expect(encontrado).not.toBeNull();
-    expect(encontrado.status).toBe('APROVADO');
+    /* Os dois produtos sao do mesmo produtor: deve haver UMA linha. */
+    expect(rows).toHaveLength(1);
+    expect(rows[0].n).toBe(1);
   });
 
   /*
-   * Nenhum dado de cartao pode chegar ao banco. A tabela nao tem coluna
-   * para isso, e este teste confirma que a ausencia e real.
+   * Nenhum dado de cartao pode chegar ao banco. Sem gateway, um dado de
+   * cartao parado aqui nao teria nem provedor para assumir a
+   * responsabilidade - por isso a tabela nao tem coluna para ele.
    */
   test('nao existe coluna de dado de cartao em pagamentos', async () => {
     const { rows } = await pool.query(`
@@ -900,16 +930,17 @@ describe('pagamento no checkout', () => {
     }
   });
 
-  test('o resumo do gateway nao guarda payload sensivel', async () => {
-    await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
+  /* As colunas do gateway nao existem mais. */
+  test('nao ha coluna de transacao externa nem resumo de gateway', async () => {
+    const { rows } = await pool.query(`
+      SELECT column_name FROM information_schema.columns
+       WHERE table_name = 'pagamentos'
+    `);
 
-    await finalizar({ endereco_id: idEndereco, metodo_pagamento: 'PIX' }).expect(201);
+    const colunas = rows.map((r) => r.column_name);
 
-    const { rows } = await pool.query('SELECT resumo_gateway FROM pagamentos');
-    const resumo = rows[0].resumo_gateway;
-
-    expect(resumo).toHaveProperty('gateway');
-    expect(JSON.stringify(resumo)).not.toMatch(/card|cartao|cvv|senha/i);
+    expect(colunas).not.toContain('identificador_externo');
+    expect(colunas).not.toContain('resumo_gateway');
   });
 });
 
