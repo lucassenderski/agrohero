@@ -100,9 +100,9 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 591 no backend (21 suítes) e 32 no frontend (5 suítes), todos passando.
+Suíte de testes: 578 no backend (22 suítes) e 45 no frontend (6 suítes), todos passando.
 
-**Produção.** `agrohero-api` e `agrohero-web` no Render, servidos a partir deste repositório. Em 2026-09-21 o commit no ar é `c2a97a3`, marcado pela tag `v1.0.0-producao`. Conferência de qual commit está servido e o rollback estão na seção 9 de `docs/DEPLOY.md`.
+**Produção.** `agrohero-api` e `agrohero-web` no Render, servidos a partir deste repositório. **A versão em produção é `c2a97a3`, marcada pela tag `v1.0.0-producao`** (tag anotada, já publicada em `origin`). Esse é o ponto de rollback: se o deploy da refatoração de pagamento der errado, é para `v1.0.0-producao` que se volta. Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
 ## Armadilhas já encontradas (não repetir)
 
@@ -111,6 +111,14 @@ Suíte de testes: 591 no backend (21 suítes) e 32 no frontend (5 suítes), todo
 **`sync: false` no `render.yaml` significa "valor só no painel", e o painel pode guardar o espaço reservado.** O `CORS_ORIGINS` foi criado com o `https://exemplo.com` que a própria seção 3 do `docs/DEPLOY.md` manda usar na primeira implantação, e nunca voltou a ser corrigido. Resultado: a API rejeitava com `403 CORS_BLOQUEADO` até a origem do próprio frontend, e a vitrine publicada ficava em "Não foi possível falar com o servidor" - um erro de configuração, não de código, que nenhum teste local pega (o `.env` local tem a origem certa). Ao publicar, revisar todas as variáveis `sync: false`.
 
 **Casamento de ingrediente por `includes` casava dentro de outra palavra.** A receita compara o termo do ingrediente com o nome do produto, e o termo `mel` casava em "Frutas Ver**mel**has" - a receita de sopa oferecia uma geleia no lugar do mel. Como `casarIngredientes` devolve o **primeiro** produto que casa, um falso positivo ainda esconde o produto certo. A comparacao e por palavra inteira (regex com `\b`), em `frontend/src/dados/receitas.js`. Cuidado com termos curtos (mel, ovo, sal) em nome de produto.
+
+**A suite do backend apaga o schema do banco de teste, e a suite do frontend depende dele.** `npm test` no backend recria o schema do zero e reaplica as migrations, o que **esvazia `categorias`**. Os testes do frontend nao mockam a API: eles criam produtos de verdade, e `criarProduto` usa `categorias[0].id`. Rodar o backend e depois o frontend sem re-semear dá 19 falhas em cascata, todas com `Cannot read properties of undefined (reading 'id')` em `ajudantes.js` - parece regressao de interface, mas e o banco sem categorias. A ordem que funciona:
+```bash
+cd backend && npm test                                  # recria o schema
+cd backend && node src/database/run-seeds.js            # devolve categorias
+cd frontend && npx vitest run                           # 45 testes
+```
+O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 
 **A suite do frontend e instavel por concorrencia, nao por causa do seu codigo.** `npx vitest run` falha de forma intermitente (~1 em 4 rodadas) em `painelConsumidor.teste.jsx`, no teste `remove um endereco nao principal...`, com "Unable to find an element with the text: Endereco Antigo". Isolado o arquivo, passa sempre; com a suite inteira em paralelo, as vezes nao. Verificado: acontece **2 de 6 rodadas mesmo com a arvore limpa**, sem nenhuma alteracao. Antes de atribuir uma falha dessas a sua mudanca, confine: rode o arquivo isolado e rode a suite com `git stash`. Se a contagem de testes que falham nao tem relacao com os arquivos que voce tocou, nao e seu.
 

@@ -306,12 +306,21 @@ git push origin main
 
 Prefira `git revert` a `git reset --hard`: o reset reescreve a história e exigiria `push --force`, que apaga o commit do servidor e dificulta recuperá-lo depois.
 
-**Sobre a marca de versão.** Ainda não há tag neste repositório (`git tag -l` não devolve nada). Uma tag no commit que está no ar é a forma mais direta de nomear "a versão boa" e poder voltar a ela pelo nome:
+**Sobre a marca de versão.** A tag existe: `v1.0.0-producao` aponta para `c2a97a3` e já foi publicada em `origin`. É o nome de "a versão boa" e o alvo do rollback. Para conferir ou recriar:
 
 ```bash
-git tag -a v1.0.0-producao c2a97a3 -m "Versao em producao em 2026-09-21"
-git push origin v1.0.0-producao
+git tag -l                                   # deve listar v1.0.0-producao
+git rev-list -n1 v1.0.0-producao             # deve imprimir c2a97a3...
 ```
+
+Para o deploy da refatoração de pagamento (pagamento na retirada, sem gateway), o procedimento é:
+
+1. antes de publicar, rodar as suítes e guardar o resultado (backend `npm test`, frontend `npx vitest run` - ver a ordem em `AGENTS.md`, o teste do backend esvazia `categorias`);
+2. publicar a branch `feature/pagina-receitas` (ou o merge dela na `main`);
+3. conferir o artefato publicado, como acima;
+4. se algo der errado, **Redeploy** de `c2a97a3` no painel do `agrohero-web` e do `agrohero-api`. Como a refatoração não adiciona migration destrutiva irreversível (a `008` só remove colunas do gateway e adiciona `agricultor_id`), o banco continua compatível com a versão antiga.
+
+> A `008` mexe no banco. Ela roda no `startCommand` do Render antes do servidor subir. O `DROP COLUMN` das colunas do gateway é irreversível, mas é seguro enquanto `pagamentos` estiver sem linhas (dev e teste estão zerados). **Se a produção tiver linhas em `pagamentos`, fazer um backup do Neon antes de publicar** - o DROP apagaria `identificador_externo` sem chance de reconciliar transação antiga.
 
 ---
 
