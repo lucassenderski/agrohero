@@ -18,10 +18,16 @@ export const UNIDADES_PRODUTO = [
   'unidade', 'kg', 'g', 'litro', 'ml', 'duzia', 'bandeja', 'maço', 'caixa', 'pacote',
 ];
 
+/*
+ * Formas de pagamento, todas efetuadas no local da retirada/entrega.
+ *
+ * Espelha METODOS_PAGAMENTO em backend/src/validators/checkoutValidators.js.
+ * Nao ha boleto (nao se compensa na retirada) nem cobranca online.
+ */
 export const METODOS_PAGAMENTO = [
   { valor: 'PIX', rotulo: 'PIX' },
-  { valor: 'CARTAO', rotulo: 'Cartao de credito' },
-  { valor: 'BOLETO', rotulo: 'Boleto' },
+  { valor: 'CARTAO', rotulo: 'Cartao' },
+  { valor: 'DINHEIRO', rotulo: 'Dinheiro' },
 ];
 
 /* `situacao` no backend tem default 'todos' - nao string vazia. */

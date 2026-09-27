@@ -232,12 +232,62 @@ export default function PedidoDetalhe() {
             </section>
           )}
 
-          {(pedido.pagamentos || []).length > 0 && (
+          {/*
+            Visao do produtor: ele nao recebe a lista `pagamentos` (isso
+            lhe mostraria quanto os concorrentes ganharam no mesmo
+            pedido), e sim `meu_pagamento`. Renderizamos o que e dele.
+          */}
+          {pedido.visao === 'agricultor' && pedido.meu_pagamento && (
             <section className="painel-secao">
-              <h2 className="painel-secao__titulo">Pagamentos</h2>
+              <h2 className="painel-secao__titulo">Seu pagamento</h2>
+              <p className="campo__dica">
+                Voce recebe este valor na retirada ou entrega, direto do cliente. Confirme o
+                recebimento em <strong>Pedidos recebidos</strong>.
+              </p>
               <table className="painel-secao__tabela">
                 <thead>
                   <tr>
+                    <th>Metodo</th>
+                    <th>Status</th>
+                    <th>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>{pedido.meu_pagamento.metodo}</td>
+                    <td>
+                      <Selo
+                        variante={classeStatusPedido(pedido.meu_pagamento.status).replace(
+                          'selo--',
+                          '',
+                        )}
+                      >
+                        {rotularStatusPagamento(pedido.meu_pagamento.status)}
+                      </Selo>
+                    </td>
+                    <td>{formatarMoeda(pedido.meu_pagamento.valor)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {(pedido.pagamentos || []).length > 0 && (
+            <section className="painel-secao">
+              <h2 className="painel-secao__titulo">Pagamento na retirada</h2>
+              <p className="campo__dica">
+                O pagamento e feito diretamente ao produtor, na retirada ou entrega. Cada
+                produtor recebe apenas a sua parte do pedido.
+              </p>
+              <table className="painel-secao__tabela">
+                <thead>
+                  <tr>
+                    {/*
+                      A coluna do produtor so aparece para quem pode ver
+                      mais de um pagamento (cliente dono ou admin). O
+                      produtor recebe `meu_pagamento` e nao esta lista.
+                    */}
+                    <th>Produtor</th>
                     <th>Metodo</th>
                     <th>Status</th>
                     <th>Valor</th>
@@ -247,6 +297,7 @@ export default function PedidoDetalhe() {
                 <tbody>
                   {pedido.pagamentos.map((pagamento) => (
                     <tr key={pagamento.id}>
+                      <td>{pagamento.nome_fazenda || '-'}</td>
                       <td>{pagamento.metodo}</td>
                       <td>
                         <Selo variante={classeStatusPedido(pagamento.status).replace('selo--', '')}>

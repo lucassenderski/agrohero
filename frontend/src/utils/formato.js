@@ -61,12 +61,18 @@ export const ROTULOS_STATUS_PEDIDO = {
   CANCELADO: 'Cancelado',
 };
 
+/*
+ * Rotulos de pagamento.
+ *
+ * Refletem o pagamento na retirada: PENDENTE e "A pagar na retirada",
+ * nao "aguardando" um gateway que nao existe mais. O usuario precisa
+ * entender que a acao e presencial, e nao que algo esta processando no
+ * servidor.
+ */
 export const ROTULOS_STATUS_PAGAMENTO = {
-  PENDENTE: 'Aguardando pagamento',
-  APROVADO: 'Pagamento aprovado',
-  RECUSADO: 'Pagamento recusado',
-  CANCELADO: 'Pagamento cancelado',
-  REEMBOLSADO: 'Reembolsado',
+  PENDENTE: 'A pagar na retirada',
+  PAGO: 'Pago',
+  CANCELADO: 'Cancelado',
 };
 
 export function rotularStatusPedido(status) {

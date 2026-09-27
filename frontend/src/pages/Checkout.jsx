@@ -17,10 +17,18 @@ import EnderecoFormulario, {
 import { formatarMoeda, resumirEndereco } from '../utils/formato.js';
 import '../components/pedido.css';
 
+/*
+ * Formas de pagamento, todas no local da retirada/entrega.
+ *
+ * A escolha NAO dispara cobranca online: ela avisa o produtor como o
+ * cliente pretende pagar (levar troco, maquininha, chave PIX). O
+ * pagamento so acontece presencialmente, e o produtor confirma o
+ * recebimento no painel dele depois.
+ */
 const METODOS = [
-  { valor: 'PIX', rotulo: 'PIX', descricao: 'Aprovacao imediata no sandbox.' },
-  { valor: 'CARTAO', rotulo: 'Cartao de credito', descricao: 'Processado pelo gateway.' },
-  { valor: 'BOLETO', rotulo: 'Boleto', descricao: 'Compensa em ate 2 dias uteis.' },
+  { valor: 'PIX', rotulo: 'PIX', descricao: 'Voce paga via PIX na retirada.' },
+  { valor: 'CARTAO', rotulo: 'Cartao', descricao: 'Cartao na maquininha do produtor.' },
+  { valor: 'DINHEIRO', rotulo: 'Dinheiro', descricao: 'Em especie, no ato da retirada.' },
 ];
 
 const ENDERECO_VAZIO = { ...ENDERECO_VAZIO_BASE };
@@ -33,10 +41,12 @@ const ENDERECO_VAZIO = { ...ENDERECO_VAZIO_BASE };
  * abrir a pagina e confirmar, o preco ou o frete podem mudar, e o
  * cliente precisa ver exatamente o valor que sera cobrado.
  *
- * O pagamento recusado NAO desfaz o pedido - o backend cria o pedido e
- * registra o pagamento separadamente. Por isso, apos finalizar, o
- * usuario e levado ao pedido mesmo quando o status do pagamento nao e
- * APROVADO: o pedido existe e pode ser pago depois.
+ * NAO HA PAGAMENTO ONLINE. A cobranca acontece no local da
+ * retirada/entrega, direto ao produtor. O backend registra quanto cada
+ * produtor tem a receber (PENDENTE) e o pedido ja nasce valido - nao ha
+ * gateway para aprovar nem recusar nada. Por isso, apos confirmar, o
+ * usuario vai para o pedido com uma mensagem de sucesso, e nao de
+ * "pagamento em analise".
  */
 export default function Checkout() {
   const { carrinho, recarregar } = useCarrinho();
@@ -139,18 +149,11 @@ export default function Checkout() {
       const resultado = await finalizarCheckout(enderecoId, metodo);
 
       /*
-       * O pedido existe mesmo com pagamento recusado - o backend grava o
-       * pedido e o pagamento em passos separados. A mensagem acompanha o
-       * status real do pagamento, e nao um "sucesso" generico.
+       * Nao ha pagamento a aprovar: o pedido e criado e sera pago na
+       * retirada. A mensagem confirma o pedido e ja lembra o cliente
+       * onde o pagamento acontece, para nao haver surpresa no balcao.
        */
-      if (resultado.pagamento?.status === 'APROVADO') {
-        sucesso('Pedido realizado com sucesso.');
-      } else {
-        notificarErro(
-          resultado.pagamento?.mensagem ||
-            'Pedido criado, mas o pagamento nao foi aprovado. Voce pode tentar novamente.',
-        );
-      }
+      sucesso('Pedido confirmado! O pagamento sera feito na retirada ou entrega.');
 
       await recarregar();
       navegar(`/pedidos/${resultado.pedido.id}`, { replace: true });
@@ -242,7 +245,16 @@ export default function Checkout() {
           </section>
 
           <section className="painel-secao">
-            <h2 className="painel-secao__titulo">Forma de pagamento</h2>
+            <div className="painel__cabecalho">
+              <h2 className="painel-secao__titulo">Pagamento na retirada</h2>
+            </div>
+
+            <p className="campo__dica">
+              O pagamento <strong>nao</strong> e feito agora nem por este site. Voce paga
+              diretamente ao produtor, no momento da retirada ou entrega do produto. Escolha
+              abaixo como pretende pagar, para o produtor se preparar.
+            </p>
+
             <div className="checkout__metodos">
               {METODOS.map((opcao) => (
                 <label
@@ -265,8 +277,10 @@ export default function Checkout() {
                 </label>
               ))}
             </div>
+
             <p className="campo__dica">
-              Nenhum dado de cartao passa por este site: a cobranca e feita pelo gateway.
+              Nenhum dado de cartao passa por este site: a cobranca e presencial, direto com
+              o produtor.
             </p>
           </section>
 
@@ -329,13 +343,18 @@ export default function Checkout() {
             </p>
           )}
 
+          <p className="campo__dica">
+            O pagamento de <strong>{formatarMoeda(previa?.valor_total ?? carrinho.valor_total)}</strong>{' '}
+            sera feito na retirada ou entrega.
+          </p>
+
           <button
             type="button"
             className="botao botao--primario botao--bloco"
             disabled={finalizando || calculando || bloqueado || !enderecoId}
             onClick={confirmar}
           >
-            {finalizando ? 'Processando pagamento...' : 'Confirmar pedido'}
+            {finalizando ? 'Confirmando pedido...' : 'Confirmar pedido'}
           </button>
         </aside>
       </div>
