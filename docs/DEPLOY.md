@@ -262,7 +262,60 @@ Alternativas avaliadas, e por que não foram escolhidas:
 
 ---
 
-## 9. Depois do deploy
+## 9. Qual versão está publicada, e como voltar
+
+Registro do commit que estava no ar, para poder retornar a ele se uma alteração der errado.
+
+| Data | Commit | Assunto | Evidência |
+|---|---|---|---|
+| 2026-09-21 | `c2a97a3` | Agents/frontend style update request (#1) | bundle do site confere com o build deste commit |
+
+**Como o commit foi confirmado.** Não basta olhar o painel do Render: ele mostra o último deploy *disparado*, que pode ter falhado e deixado a versão anterior no ar. O que prova é o artefato. Reconstruindo o frontend deste commit com o mesmo `VITE_API_URL` da produção, o Vite gera nomes de arquivo derivados do conteúdo:
+
+```
+VITE_API_URL=https://agrohero.onrender.com/api/v1 npm run build
+  dist/assets/index-D428IuJ9.js   278.80 kB
+  dist/assets/index-CDKZtmvQ.css   37.16 kB
+```
+
+Foram exatamente esses dois nomes que o site publicado serviu (`index-D428IuJ9.js`, `index-CDKZtmvQ.css`), então o que está no ar é este commit, e não um deploy posterior.
+
+Para repetir a conferência a qualquer momento:
+
+```bash
+ok=$(curl -s https://agrohero-web.onrender.com | grep -oE 'index-[A-Za-z0-9_-]+\.js' | head -1)
+echo "no ar: $ok"
+```
+
+**O que este estado tem.** O app publicado funciona no fluxo principal, mas duas coisas estão fora do lugar e foram descobertas na auditoria:
+
+- o `CORS_ORIGINS` do `agrohero-api` **não inclui** a origem do próprio frontend, então a API responde `403 CORS_BLOQUEADO` e a vitrine publicada mostra "Não foi possível falar com o servidor". A causa é o valor de espaço reservado (`https://exemplo.com`) que a seção 3 manda usar na primeira criação e que nunca foi corrigido;
+- o pacote publicado é anterior à página de receitas.
+
+### Como voltar para este commit
+
+**Rollback pelo painel (mais rápido).** Abra `agrohero-web` → **Deploys** → localize o deploy bem-sucedido de `c2a97a3` → **Redeploy**. O Render republica aquele artefato sem precisar mexer no Git.
+
+**Voltar pelo Git.** Se a branch principal já tiver commits ruins por cima:
+
+```bash
+git revert --no-commit c2a97a3..HEAD   # desfaz os commits posteriores, mantendo histórico
+git commit -m "revert: volta para a versao estavel de 2026-09-21"
+git push origin main
+```
+
+Prefira `git revert` a `git reset --hard`: o reset reescreve a história e exigiria `push --force`, que apaga o commit do servidor e dificulta recuperá-lo depois.
+
+**Sobre a marca de versão.** Ainda não há tag neste repositório (`git tag -l` não devolve nada). Uma tag no commit que está no ar é a forma mais direta de nomear "a versão boa" e poder voltar a ela pelo nome:
+
+```bash
+git tag -a v1.0.0-producao c2a97a3 -m "Versao em producao em 2026-09-21"
+git push origin v1.0.0-producao
+```
+
+---
+
+## 10. Depois do deploy
 
 - [ ] `/health` responde `ok` com o banco conectado
 - [ ] `npm run seed` rodou e a senha do administrador foi anotada
