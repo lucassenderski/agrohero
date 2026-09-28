@@ -88,27 +88,26 @@ Essa ida e volta é normal: os dois serviços se referenciam, e um dos dois prec
 
 O backend **recusa subir** em produção com segredos de exemplo. Isso é uma guarda em `src/config/verificacaoProducao.js`, e ela existe porque o `.env.example` tem valores de modelo que passariam na validação de tamanho — alguém poderia publicar com o `JWT_SECRET` do repositório, e qualquer pessoa forjar um token de administrador.
 
-Gere dois valores aleatórios:
+Gere um valor aleatório:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-Rode o comando **duas vezes**: um valor para `JWT_SECRET`, outro para `PAYMENT_WEBHOOK_SECRET`. Não reaproveite o mesmo.
-
 | Variável | Valor |
 |---|---|
 | `DATABASE_URL` | a connection string do Neon (com `?sslmode=require`) |
 | `JWT_SECRET` | valor aleatório gerado acima |
-| `PAYMENT_WEBHOOK_SECRET` | outro valor aleatório, diferente do anterior |
 | `CORS_ORIGINS` | a URL do frontend no Render, com `https://` |
 | `RATE_LIMIT_MAX_LOGIN` | opcional; padrão 10. Suba para ~30 se for demonstrar o sistema |
 
 As três regras que o backend verifica em produção, e que fazem o processo morrer na subida se violadas:
 
-- `JWT_SECRET` e `PAYMENT_WEBHOOK_SECRET` não podem conter `troque`, `placeholder`, `changeme`, `sua_chave` ou `example`;
+- `JWT_SECRET` não pode conter `troque`, `placeholder`, `changeme`, `sua_chave` ou `example`;
 - `CORS_ORIGINS` não pode conter `*`;
 - `CORS_ORIGINS` não pode usar `http://` — em produção, só `https://`.
+
+> Não há segredo de gateway de pagamento. O pagamento é feito na retirada ou entrega, direto ao produtor (ver a seção 9).
 
 ---
 
@@ -152,7 +151,7 @@ npm run migrate && npm run seed && npm start
 
 5. **Volte o Start Command** para `npm run migrate && npm start`.
 
-> **O seed também passa pela guarda de produção.** Se `JWT_SECRET`, `PAYMENT_WEBHOOK_SECRET` ou `CORS_ORIGINS` estiverem com valor de exemplo, o seed encerra com código 1 e **não cria nada** — a mesma guarda do `src/config/verificacaoProducao.js` roda no seed, porque ele importa o `env.js`. Nesse caso ele imprime a lista de problemas e sai; corrija as variáveis antes de tentar de novo. Como o `&&` no comando de start propaga a falha, o deploy aparece como falho, o que é o comportamento desejado: melhor falhar do que subir sem administrador.
+> **O seed também passa pela guarda de produção.** Se `JWT_SECRET` ou `CORS_ORIGINS` estiverem com valor de exemplo, o seed encerra com código 1 e **não cria nada** — a mesma guarda do `src/config/verificacaoProducao.js` roda no seed, porque ele importa o `env.js`. Nesse caso ele imprime a lista de problemas e sai; corrija as variáveis antes de tentar de novo. Como o `&&` no comando de start propaga a falha, o deploy aparece como falho, o que é o comportamento desejado: melhor falhar do que subir sem administrador.
 
 O passo 5 não é opcional: deixar o seed no start faz ele rodar em todo deploy. Como é idempotente não haveria dano, mas também não haveria motivo — e um restart acidental do serviço não deve mexer no banco sem necessidade.
 
@@ -203,8 +202,8 @@ Faça o percurso inteiro, que é o mesmo da apresentação:
 3. **Produtor** — cadastre um produto com preço e estoque.
 4. **Vitrine** — o produto aparece na listagem; use a busca e os filtros.
 5. **Carrinho** — adicione o produto.
-6. **Checkout** — finalize o pedido (com `PAYMENT_GATEWAY=fake`, o pagamento é simulado e aprovado).
-7. **Pedidos** — o produtor vê o pedido, altera o status até `ENTREGUE`.
+6. **Checkout** — finalize o pedido escolhendo PIX, cartão ou dinheiro. O pagamento é feito na retirada, não no site.
+7. **Pedidos** — o produtor vê o pedido, confirma o recebimento do pagamento e altera o status até `ENTREGUE`.
 8. **Avaliação** — o consumidor avalia o produto.
 
 Se o passo 4 não mostrar o produto, o problema costuma ser o `CORS_ORIGINS` (veja abaixo).
