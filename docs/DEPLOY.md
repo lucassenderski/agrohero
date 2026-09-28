@@ -269,6 +269,7 @@ Registro do commit que estava no ar, para poder retornar a ele se uma alteraçã
 |---|---|---|---|
 | 2026-09-21 | `c2a97a3` | Agents/frontend style update request (#1) | bundle do site confere com o build deste commit |
 | 2026-09-28 | `13f7843` | Merge do PR #2: receitas + pagamento na retirada | bundle publicado confere com o build deste commit |
+| 2026-09-28 | `3877ebd` | Merge do PR #4: status da API e credito do autor no rodape | `index-CdXIFNOT.js` / `index-XDtJjm7j.css` batem com o build deste commit |
 
 ### Quais serviços servem o quê (conferido em 2026-09-28)
 
@@ -281,11 +282,13 @@ Duas descobertas ao publicar:
 
 ```
 VITE_API_URL=https://agrohero.onrender.com/api/v1 npm run build
-  dist/assets/index-CmGKd0IQ.js   306.12 kB
+  dist/assets/index-CmGKd0IQ.js   306.12 kB   # commit 13f7843
   dist/assets/index-CpZtM69n.css   47.08 kB
 ```
 
-Foram exatamente esses dois nomes que o site publicado serviu (`index-CmGKd0IQ.js`, `index-CpZtM69n.css`), então o que está no ar é o commit `13f7843`. O bundle confirma o conteúdo: contém "Pagamento na retirada" e "Confirmar recebimento", e **nenhuma** ocorrencia de `BOLETO`, `Mercado Pago` ou `APROVADO`.
+Foram exatamente esses dois nomes que o site publicado serviu (`index-CmGKd0IQ.js`, `index-CpZtM69n.css`), então o que estava no ar era o commit `13f7843`. O bundle confirma o conteúdo: contém "Pagamento na retirada" e "Confirmar recebimento", e **nenhuma** ocorrencia de `BOLETO`, `Mercado Pago` ou `APROVADO`.
+
+**Versão seguinte (`3877ebd`, PR #4).** Depois do merge do PR #4, o build do mesmo comando produziu `index-CdXIFNOT.js` / `index-XDtJjm7j.css`, e o site passou a servir exatamente esses nomes - a troca do hash do bundle e a evidência de que o Vercel publicou o commit novo. O rodapé publicado confirma o conteúdo: mostra `API: ok`, `PostgreSQL: ok`, `Ambiente: production`, `Latência do banco: 174 ms` e o crédito "Criado por Lucas Senderski · RU: 4758862". O valor exibido bate com o `/health` da API no momento da conferência.
 
 Provas adicionais de que a `008` foi aplicada (o servidor so sobe se a migration passar):
 
