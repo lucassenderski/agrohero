@@ -98,6 +98,10 @@ Cada arquivo roda dentro de sua própria transação, então uma falha no meio r
 | `003_catalogo.sql` | `categorias`, `produtos` |
 | `004_pedidos.sql` | `carrinhos`, `carrinho_itens`, `pedidos`, `pedido_itens` e o trigger de sincronização de status |
 | `005_pagamentos_avaliacoes.sql` | `pagamentos`, `avaliacoes` e a view `produtos_com_avaliacao` |
+| `006_view_tipos.sql` | corrige tipos que o driver devolve fora do esperado na view `produtos_com_avaliacao` |
+| `007_redefinicao_senha.sql` | `redefinicoes_senha` (tokens de redefinição de senha) |
+| `008_pagamento_na_retirada.sql` | remove as colunas do gateway, adiciona `pagamentos.agricultor_id` e troca as constraints de método e status |
+| `009_logo_propriedade.sql` | `agricultores.logo_bytes` e `logo_mime` (logo enviada pelo produtor, com teto de tamanho) |
 
 ### Seeds
 
@@ -168,11 +172,11 @@ backend/
 | 10 | Carrinho e endereços | ✅ concluída |
 | 11 | Checkout transacional | ✅ concluída |
 | 12 | Pedidos e transição de status | ✅ concluída |
-| 13 | Pagamentos (webhook e estorno) | ✅ concluída |
+| 13 | Pagamentos na retirada (PIX, cartão, dinheiro) | ✅ concluída |
 | 14 | Avaliações | ✅ concluída |
 | 15–24 | Frontend, painéis, segurança, testes, deploy | pendente |
 
-Suíte de testes: **507 testes em 16 suítes**, todos passando (`npm test`).
+Suíte de testes: **612 testes em 24 suítes**, todos passando (`npm test`).
 
 ### Avaliações — a regra de autorização
 
