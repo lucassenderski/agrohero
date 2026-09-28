@@ -120,6 +120,8 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 
 **Código antigo e migration reversa não andam juntos.** Fazer Redeploy de `c2a97a3` depois de aplicar a `008` volta o código, mas não o schema: o código antigo grava `identificador_externo`/`resumo_gateway`, que a `008` apagou. O rollback de verdade exige o backup do banco (restore point/branch do Neon). Rollback de aplicação e de schema são decisões separadas.
 
+**A `009` (logo) não tem pré-condição de dados e é idempotente.** Ela só faz `ADD COLUMN IF NOT EXISTS` em `agricultores` e recria duas constraints (`DROP CONSTRAINT IF EXISTS` + `ADD`). Nenhuma constraint nova é validada contra dados existentes de forma perigosa: as colunas nascem NULL em todas as linhas, e a `CHECK` aceita `NULL/NULL`. O risco que a `008` tinha - constraint nova avaliando linhas antigas de vocabulário obsoleto - **não existe aqui**. Rodar no Neon não exige preparar dados antes.
+
 **A suite do backend apaga o schema do banco de teste, e a suite do frontend depende dele.** `npm test` no backend recria o schema do zero e reaplica as migrations, o que **esvazia `categorias`**. Os testes do frontend nao mockam a API: eles criam produtos de verdade, e `criarProduto` usa `categorias[0].id`. Rodar o backend e depois o frontend sem re-semear dá 19 falhas em cascata, todas com `Cannot read properties of undefined (reading 'id')` em `ajudantes.js` - parece regressao de interface, mas e o banco sem categorias. A ordem que funciona:
 ```bash
 cd backend && npm test                                  # recria o schema
@@ -212,13 +214,15 @@ O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATA
 
 **Transacao testada so por "nada foi gravado" nao esta testada.** Desligar BEGIN/ROLLBACK nao fez os testes de atomicidade falharem, porque a revalidacao barrava tudo antes da primeira escrita. Foi preciso um teste que baixa o estoque de verdade e lanca erro depois, exercitando `emTransacao` diretamente. Vale desconfiar de cobertura de rollback que passa sem nunca ter escrito nada.
 
-**Falha de gateway de pagamento nao desfaz o pedido.** O pedido, os itens e a baixa de estoque acontecem na transacao; a chamada ao gateway acontece DEPOIS do commit. Segurar uma transacao aberta esperando rede de terceiro prenderia locks de estoque e conexao do pool. Se o gateway falhar, o pedido fica com pagamento PENDENTE e o cliente tenta de novo.
+**O pagamento acontece no local; o checkout nao cobra nada.** Nao existe gateway, webhook nem estorno. O `POST /checkout` cria o pedido e registra quanto CADA produtor tem a receber na retirada, com status PENDENTE. Quem confirma o recebimento e o produtor, pelo painel dele (`PATCH /pedidos/:id/pagamento`). Isso significa que "pagamento aprovado" nao e um estado possivel na criacao - so PENDENTE, PAGO ou CANCELADO.
 
-**Identificador do gateway precisa ser GRAVADO, nao so devolvido.** Bug real encontrado na validacao manual: o checkout devolvia o id da transacao na resposta, mas o UPDATE so persistia status e resumo. Sem ele, `buscarPagamentoPorIdentificador` nao acharia nada e um webhook de PIX nao teria como reconciliar - o pedido ficaria pendente para sempre. Vale conferir, campo a campo, se todo dado devolvido na resposta tambem foi persistido.
+**O pagamento e por PRODUTOR, nao por pedido.** Um pedido pode ter itens de varios produtores, e cada um recebe o seu na retirada. Com uma linha por pedido, "quem confirma o recebimento?" nao teria resposta, e um produtor confirmaria o pagamento do produto de outro. A posse e o eixo da seguranca: o agricultor vem do TOKEN, e a consulta e por `(pedidoId, agricultorId)`. Mandar o id de um pedido alheio devolve 404, porque a linha consultada nao existe para ele.
 
-**Gateway simulado deve ser deterministico, nao aleatorio.** O `gatewayFake` decide por regra (valor terminando em ,13 recusado, ,99 pendente, resto aprovado). Um resultado aleatorio tornaria os testes instaveis - o mesmo teste passaria e falharia sem mudanca de codigo.
+**A ordem das checagens em `confirmarPagamento` importa.** Primeiro "tem pagamento meu neste pedido?" (404 se nao), e so depois as regras de estado. Invertendo, um produtor de fora receberia "pagamento ja confirmado" a respeito de um pedido que nao e dele - informacao que nao precisa sair daqui.
 
-**Em producao, o gateway simulado e recusado explicitamente.** `paymentService` lanca erro se `PAYMENT_GATEWAY=fake` com NODE_ENV=production. Um erro de configuracao silencioso geraria pedidos entregues sem dinheiro nenhum ter entrado.
+**Confirmar duas vezes nao e erro.** O `UPDATE ... WHERE status = 'PENDENTE'` e condicional. Se ele nao encontra a linha, outra requisicao confirmou no meio: relemos o pagamento e respondemos o estado real com `ja_estava_pago: true`, em vez de dar baixa duas vezes.
+
+**Pedido cancelado nao aceita confirmacao de pagamento.** Recusar explicitamente (`PEDIDO_CANCELADO`) e melhor que dar baixa num pedido que nao vai ser entregue. O cancelamento, por sua vez, marca como CANCELADO apenas os pagamentos ainda PENDENTE - um pagamento ja PAGO nao vira CANCELADO por um UPDATE em massa.
 
 **Status do pedido é derivado dos itens, por trigger no banco.** `pedidos.status` não é escrito pela aplicação. A função `sincronizar_status_pedido()` (migration 004) recalcula a cada mudança de item, com precedência: todos cancelados → CANCELADO; todos entregues → ENTREGUE; todos enviados/entregues → ENVIADO; algum em andamento → PROCESSANDO; senão PENDENTE. Escrever o status na aplicação criaria dois lugares decidindo o mesmo estado, e um deles esqueceria.
 
@@ -238,21 +242,9 @@ O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATA
 
 **Frete precisa ser calculado antes do total, nunca depois.** O banco exige `valor_total = valor_produtos + valor_frete`, e o frete gratis depende do valor dos PRODUTOS. Calcular o frete a partir do total seria circular.
 
-**Validar assinatura não é o mesmo que confiar no conteúdo.** O webhook tem assinatura HMAC válida e mesmo assim o status do corpo é IGNORADO: o servidor chama `paymentService.consultar()` e aplica a resposta do gateway. Sem isso, um webhook antigo reenviado (assinatura válida, evento superado) reverteria um estorno. A assinatura prova a ORIGEM; a reconciliação prova o ESTADO.
+**A notificacao por e-mail sai FORA da transacao e nunca derruba o pedido.** `notificarPedidoCriado` roda depois do commit e engole a propria falha (log + segue). Uma falha de SMTP nao pode desfazer um pedido ja gravado, com estoque ja baixado: o pedido existe no banco e o cliente o ve no historico, que e a fonte de verdade. E-mail e informacao acessoria.
 
-**Gateway fake que ecoa o status local torna a reconciliação inútil.** A primeira versão de `gatewayFake.consultar()` devolvia o `statusAtual` que o banco informava — um espelho que nunca discorda. Um fake que sempre concorda esconde exatamente o bug que a reconciliação existe para pegar. A correção foi um ledger em memória, com `_simularPagamentoConfirmado`/`_registrarStatus` representando um evento externo (o pagador concluiu o PIX no banco dele). O teste que provava o contrário falha ao trocar a consulta pelo corpo.
-
-**A assinatura cobre os BYTES, não o JSON equivalente.** `JSON.stringify(obj, null, 2)` e `JSON.stringify(obj)` são o mesmo objeto e strings diferentes: a assinatura de uma não vale para a outra. Por isso `express.json({ verify })` guarda `req.rawBody` — re-serializar o objeto parseado muda espaços, ordem de chaves e formato de número, e corromperia a verificação.
-
-**Comparar assinaturas com `===` vaza o segredo pelo tempo de resposta.** O comparador para no primeiro byte diferente, então medir o tempo revela a assinatura byte a byte. Usar `crypto.timingSafeEqual`, com guarda de tamanho antes (a função lança se os buffers tiverem tamanhos diferentes, e isso viraria 500).
-
-**Webhook sem segredo configurado deve ser RECUSADO, não aceito.** `verificarAssinatura` lança 500 quando `PAYMENT_WEBHOOK_SECRET` está vazio. Aceitar sem verificar transformaria um erro de configuração numa porta aberta para marcar pedidos como pagos. Falhar fechado.
-
-**Webhook responde 200 mesmo quando ignora o evento.** 404 faria o gateway reenviar para sempre um evento que nunca vai casar (de outro ambiente, ou de pagamento antigo). A exceção são erros reais: 403 para assinatura inválida e 422 para falha de reconciliação, onde o reenvio É desejado.
-
-**Estorno roda FORA da transação de cancelamento.** É chamada HTTP externa que pode levar segundos; dentro da transação, seguraria uma conexão do pool e uma linha travada durante toda a espera — alguns cancelamentos simultâneos esgotariam o pool. Consequência aceita: o estorno pode falhar depois do cancelamento confirmado. Nesse caso o cancelamento NÃO é desfeito (devolver dinheiro é obrigação, não condição) e a resposta traz `estorno_pendente: true` para a operação agir.
-
-**`env.PAYMENT_GATEWAY` é mutável em runtime, e os testes dependem disso.** O teste de falha de estorno troca o gateway por um inexistente dentro de um `try/finally`. `config/env.js` exporta o objeto `env`, e não valores congelados — o `finally` restaura.
+**Os dois e-mails do checkout tem publicos diferentes.** `enviarEmailPedidoConfirmado` vai para o CLIENTE (o pedido existe e quanto vai pagar na retirada); `enviarEmailNovoPedidoProdutor` vai para CADA produtor com itens no pedido, com o valor que ele tem a receber. Confirmar o recebimento no painel, por sua vez, nao dispara e-mail - o produtor acabou de fazer a acao e ja ve o resultado na tela.
 
 ---
 
@@ -273,6 +265,12 @@ O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATA
 **Nome de dado de teste colidindo com rótulo da interface quebra o teste.** `nome_destinatario: 'Principal'` fazia `getByText('Principal')` achar tanto o nome quanto o selo "Principal" do endereço principal. Usar nomes que não aparecem como rótulo na tela.
 
 **`window.confirm` precisa de `vi.spyOn` no jsdom.** O diálogo não existe e a remoção fica sem autorização. Lembrar de `mockRestore()` no fim.
+
+**O `fetch` do jsdom nao envia o `FormData` do jsdom como multipart.** Ele cai no caminho generico e manda a STRING `"[object FormData]"` com `Content-Type: text/plain`; o servidor responde "nenhum arquivo foi enviado". Um teste de upload passa a acusar a aplicacao por um defeito do ambiente. A correcao e trocar `fetch`/`FormData` pelas pecas do Node (`undici`) e `File` pelo `node:buffer`, que falam o mesmo protocolo entre si.
+
+**Essa troca de `fetch` tem que ficar no arquivo que faz upload, nao no setup compartilhado.** Aplicada em `configuracao.js`, ela contamina a suite inteira: o undici mantem um pool de conexoes proprio, e os testes - que rodam em paralelo contra o mesmo backend - passam a competir por um recurso que o ambiente nao compartilha com o resto. O sintoma e falha intermitente em testes SEM relacao com upload, que somem quando o arquivo roda sozinho. O vitest isola os globals por arquivo, entao o escopo local resolve.
+
+**`fetch` global do Node nao consome o `FormData` do pacote `undici`.** Sao implementacoes distintas: o `FormData` do `undici` so funciona com o `fetch` do proprio `undici`. Trocar so um dos dois (o caso "minimo" que parece suficiente) falha do mesmo jeito que o jsdom.
 
 ---
 
