@@ -48,9 +48,16 @@ export const limiteGeral = rateLimit({
  * `/v1/agricultores/12/logo`. Comparar com `/api/...` aqui nunca casaria,
  * e a imagem voltaria a consumir a cota da API sem nenhum aviso. Por isso
  * o regex comeca em `/v1`.
+ *
+ * O avatar entra na mesma regra: e uma imagem, e a tela que o exibe pode
+ * ser reaberta varias vezes na mesma sessao. Sem isto, o dono consumiria
+ * a cota de negocio ao navegar pelo proprio perfil.
  */
 function ehRotaDeImagem(req) {
-  return /^\/v1\/agricultores\/\d+\/logo\/?$/.test(req.path);
+  return (
+    /^\/v1\/agricultores\/\d+\/logo\/?$/.test(req.path) ||
+    /^\/v1\/usuarios\/avatar\/?$/.test(req.path)
+  );
 }
 
 /*

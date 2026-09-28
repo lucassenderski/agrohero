@@ -1371,6 +1371,108 @@ export const openapi = {
         },
       },
     },
+    /*
+     * Avatar do usuario (foto de perfil).
+     *
+     * Um unico caminho, sem id: o avatar e do dono do token. Nao existe
+     * `GET /usuarios/{id}/avatar` - a foto de um consumidor nao e publica,
+     * pelo mesmo motivo que as avaliacoes expoem so o primeiro nome.
+     */
+    '/api/v1/usuarios/avatar': {
+      put: {
+        tags: ['Usuarios'],
+        summary: 'Envia o avatar (foto de perfil)',
+        description:
+          'Recebe multipart/form-data com um unico arquivo no campo `avatar`. Aceita JPEG, PNG e WebP de ate 5 MB; a imagem e recortada em quadrado central, reamostrada para no maximo 512x512 e convertida para WebP antes de ser gravada.\n\nQualquer conta autenticada pode ter avatar - cliente, produtor ou administrador. A identidade vem do token: nao existe id no corpo nem na rota, entao ninguem troca a foto de outra pessoa.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  avatar: { type: 'string', format: 'binary' },
+                },
+                required: ['avatar'],
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Avatar gravado. Devolve o caminho da imagem.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        avatar_url: { type: 'string', example: '/usuarios/avatar' },
+                        mime: { type: 'string', example: 'image/webp' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          422: {
+            description:
+              'Arquivo recusado: muito grande (AVATAR_MUITO_GRANDE), formato nao aceito (AVATAR_FORMATO_INVALIDO) ou corrompido (AVATAR_ILEGIVEL).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+      delete: {
+        tags: ['Usuarios'],
+        summary: 'Remove o avatar',
+        description:
+          'Apaga os bytes do avatar. A interface volta a exibir as iniciais com a cor derivada do nome. A operacao e idempotente: remover um avatar inexistente tambem responde 200.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Avatar removido. `avatar_url` volta a ser null.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: { avatar_url: { type: 'null', example: null } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+        },
+      },
+      get: {
+        tags: ['Usuarios'],
+        summary: 'Imagem do avatar do usuario logado',
+        description:
+          'A resposta NAO e JSON: o corpo sao os bytes da imagem (image/webp), para uso direto em `<img src>`. Responde 404 quando o usuario nao tem avatar - nesse caso o frontend usa as iniciais.\n\nExige `Authorization` (um `<img>` comum nao envia o cabecalho, entao o frontend busca a imagem e monta um object URL). Devolve ETag; uma requisicao com If-None-Match correspondente recebe 304 sem corpo. O `Cache-Control` e `private`, porque a foto e de uma pessoa e so ela pode cachear.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Bytes da imagem.',
+            content: { 'image/webp': { schema: { type: 'string', format: 'binary' } } },
+          },
+          304: { description: 'A imagem nao mudou (If-None-Match). Sem corpo.' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
     '/api/v1/agricultores/{id}/logo': {
       get: {
         tags: ['Agricultores'],

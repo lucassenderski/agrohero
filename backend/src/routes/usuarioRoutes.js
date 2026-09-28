@@ -67,4 +67,26 @@ router.put(
 /* DELETE e nao PUT com corpo vazio: a intencao e "remover", nao "gravar nada". */
 router.delete('/logo', requireRole('agricultor'), usuarioController.removerLogo);
 
+/*
+ * Avatar do usuario (foto de perfil).
+ *
+ * Sem `requireRole`, ao contrario da logo: toda conta autenticada tem uma
+ * foto de perfil para escolher - cliente, produtor e administrador.
+ *
+ * O GET nao leva id na rota, e isso e proposital. O avatar e servido
+ * apenas ao dono: nao ha rota publica, porque uma foto de rosto indexada
+ * por id de usuario e um identificador mais forte que o primeiro nome que
+ * as avaliacoes expoem de proposito (ver `avaliacaoRepository.js`). Quem
+ * nao e o dono ve as iniciais com a cor derivada do nome.
+ */
+router.put(
+  '/avatar',
+  uploadArquivo('avatar'),
+  usuarioController.enviarAvatar,
+);
+
+router.delete('/avatar', usuarioController.removerAvatar);
+
+router.get('/avatar', usuarioController.obterAvatar);
+
 export default router;

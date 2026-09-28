@@ -1,6 +1,6 @@
 import multer from 'multer';
 import { erros } from '../utils/AppError.js';
-import { LIMITE_ENTRADA_BYTES } from '../services/logoService.js';
+import { LIMITE_ENTRADA_BYTES } from '../services/imagemService.js';
 
 /*
  * Middleware de upload de arquivo (multipart/form-data).
@@ -52,14 +52,14 @@ const upload = multer({
  * enviou uma foto de 8 MB veria uma falha de servidor em vez de
  * "a imagem e grande demais".
  */
-function traduzirErro(erro, res, next) {
+function traduzirErro(erro, res, next, prefixoErro) {
   if (erro instanceof multer.MulterError) {
     if (erro.code === 'LIMIT_FILE_SIZE') {
       const mb = (LIMITE_ENTRADA_BYTES / 1024 / 1024).toFixed(0);
       return next(
         erros.regraNegocio(
           `A imagem e maior que o limite de ${mb} MB. Reduza a imagem e tente novamente.`,
-          'LOGO_MUITO_GRANDE',
+          `${prefixoErro}MUITO_GRANDE`,
         ),
       );
     }
@@ -73,23 +73,24 @@ function traduzirErro(erro, res, next) {
 /*
  * Recebe um unico arquivo no campo informado.
  *
- * `arquivoObrigatorio` existe para reusar o mesmo middleware em rotas em
- * que o arquivo e opcional. Aqui ele e obrigatorio: a rota so existe para
- * trocar a logo, entao uma requisicao sem arquivo e um erro do cliente.
+ * O codigo de erro carrega o prefixo do perfil (LOGO_/AVATAR_): a
+ * interface distingue qual dos dois uploads falhou, em vez de tratar
+ * "muito grande" como se fosse sempre a logo.
  */
 export function uploadArquivo(campo = 'logo') {
+  const prefixoErro = campo === 'avatar' ? 'AVATAR_' : 'LOGO_';
   const middleware = upload.single(campo);
 
   return function uploadMiddleware(req, res, next) {
     middleware(req, res, (erro) => {
-      if (erro) return traduzirErro(erro, res, next);
+      if (erro) return traduzirErro(erro, res, next, prefixoErro);
 
       // Sem `req.file`, o service lancaria DADOS_INVALIDOS de forma
       // generica. Uma mensagem especifica aqui diz ao frontend qual
       // campo faltou.
       if (!req.file) {
         return next(
-          erros.dadosInvalidos('Nenhum arquivo foi enviado no campo "logo".'),
+          erros.dadosInvalidos(`Nenhum arquivo foi enviado no campo "${campo}".`),
         );
       }
 

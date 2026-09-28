@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import { erros } from '../utils/AppError.js';
 
 /*
- * Processador da logo da propriedade.
+ * Processador de imagens enviadas pelo usuario.
  *
  * Este arquivo e o unico ponto que transforma um arquivo enviado pelo
  * usuario em bytes que vao para o banco. Como o banco do Neon e o
@@ -14,7 +14,7 @@ import { erros } from '../utils/AppError.js';
  *   1. teto de bytes de ENTRADA, antes de decodificar;
  *   2. reconhecimento do formato pelos BYTES (nao pela extensao), com
  *      lista branca fechada;
- *   3. reamostragem para no maximo 800x800;
+ *   3. reamostragem para no maximo `lado` x `lado`;
  *   4. reencode em WebP com qualidade em degraus, ate caber no alvo.
  *
  * Por que a defesa 2 existe, e nao so a 1: um "decompression bomb" e um
@@ -22,6 +22,16 @@ import { erros } from '../utils/AppError.js';
  * - um PNG de poucos KB pode virar dezenas de GB na memoria. A extensao
  * nao revela isso; os magic bytes, sim. Ler o cabecalho e recusar antes
  * de chamar o decoder evita o consumo de memoria.
+ *
+ * POR QUE HA DOIS PERFIS, E NAO DUAS COPIAS DESTE ARQUIVO
+ *
+ * Logo de propriedade e avatar de usuario diferem so em tres numeros:
+ * lado maximo, alvo de bytes e teto do banco. As defesas - magic bytes,
+ * orcamento de pixels, orientacao EXIF, escada de qualidade - sao
+ * identicas, e sao exatamente a parte que nao pode divergir: uma copia
+ * significaria consertar o mesmo bug de seguranca em dois lugares. O
+ * perfil entra como parametro, e `processarLogo` segue existindo como o
+ * atalho de quem quer o comportamento de sempre.
  */
 
 /* Formatos aceitos. Lista branca fechada: qualquer outro e recusado. */
@@ -29,22 +39,6 @@ export const FORMATOS_ACEITOS = Object.freeze(['jpeg', 'png', 'webp']);
 
 /* Teto do arquivo enviado. Acima disso nem tentamos decodificar. */
 export const LIMITE_ENTRADA_BYTES = 5 * 1024 * 1024;
-
-/* Alvo do arquivo final. O teto do banco (512 KB) da margem sobre isto. */
-const ALVO_SAIDA_BYTES = 200 * 1024;
-
-/*
- * Teto absoluto do que pode ser gravado.
- *
- * Igual ao da constraint `agricultores_logo_tamanho`. Serve para que um
- * estouro vire um erro claro aqui, e nao uma violacao de check vinda do
- * Postgres - que o errorHandler transformaria em 500 sem dizer ao usuario
- * o que aconteceu.
- */
-const TETO_SAIDA_BYTES = 512 * 1024;
-
-/* Lado maior da imagem processada. */
-const LADO_MAXIMO = 800;
 
 /*
  * Orcamento de pixels do arquivo de entrada.
@@ -68,11 +62,39 @@ const MAX_PIXELS = 50 * 1000 * 1000;
  * (~150 KB em q82), mas a escada precisa funcionar tambem quando nao
  * comprime - senao o alvo seria apenas uma esperanca.
  *
- * Comecar em 82 e nao em 100 e deliberado: uma logo exibida a 200 px nao
- * se beneficia de qualidade 100, e o arquivo seria varias vezes maior
+ * Comecar em 82 e nao em 100 e deliberado: uma imagem exibida a 200 px
+ * nao se beneficia de qualidade 100, e o arquivo seria varias vezes maior
  * pelo mesmo resultado visual.
  */
 const QUALIDADES = [82, 72, 62, 52, 45];
+
+/*
+ * Perfis de destino.
+ *
+ * `lado`       - maior lado da imagem gravada (recorte quadrado central).
+ * `alvoBytes`  - tamanho que a escada de qualidade tenta alcancar.
+ * `tetoBytes`  - limite absoluto; espelha a constraint CHECK do banco.
+ * `codigoErro` - prefixo dos codigos, para a interface distinguir qual
+ *                dos dois uploads falhou.
+ *
+ * O avatar e menor nos tres numeros porque aparece em miniatura (32 a 96
+ * px): guardar 800x800 para exibir a 48 px seria desperdicar o recurso
+ * escasso sem nenhum ganho visivel.
+ */
+export const PERFIS = Object.freeze({
+  logo: Object.freeze({
+    lado: 800,
+    alvoBytes: 200 * 1024,
+    tetoBytes: 512 * 1024,
+    codigoErro: 'LOGO',
+  }),
+  avatar: Object.freeze({
+    lado: 512,
+    alvoBytes: 60 * 1024,
+    tetoBytes: 128 * 1024,
+    codigoErro: 'AVATAR',
+  }),
+});
 
 /* Cabecalhos magicos. Comparados com o inicio do buffer, sem olhar a extensao. */
 function reconhecerFormato(buffer) {
@@ -108,21 +130,24 @@ function reconhecerFormato(buffer) {
  * QUALQUER eixo, e com `fit: 'cover'` isso anula o recorte. Medido: uma
  * imagem 1200x400 com alvo 800 e `withoutEnlargement` sai 800x400 - nao
  * quadrada, que e exatamente o que o card espera. Entao o lado alvo e
- * calculado antes como `min(LADO_MAXIMO, menor lado da imagem)`, e o
+ * calculado antes como `min(ladoMaximo, menor lado da imagem)`, e o
  * upscale nunca acontece porque o alvo ja nasce menor que a imagem.
  */
-function ladoAlvo(metadados) {
+function ladoAlvo(metadados, ladoMaximo) {
   const menorLado = Math.min(metadados.width, metadados.height);
-  return Math.max(1, Math.min(LADO_MAXIMO, menorLado));
+  return Math.max(1, Math.min(ladoMaximo, menorLado));
 }
 
 /*
  * Processa o arquivo e devolve os bytes prontos para gravar.
  *
- * Recebe o buffer cru do multer (memoryStorage) e devolve
- * `{ bytes, mime }`. Lanca AppError 422 quando o arquivo nao serve.
+ * Recebe o buffer cru do multer (memoryStorage) e o perfil de destino,
+ * e devolve `{ bytes, mime, formatoEntrada, lado }`. Lanca AppError 422
+ * quando o arquivo nao serve.
  */
-export async function processarLogo(buffer) {
+export async function processarImagem(buffer, perfil = PERFIS.logo) {
+  const { alvoBytes, tetoBytes, lado: ladoMaximo, codigoErro } = perfil;
+
   if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
     throw erros.dadosInvalidos('Nenhum arquivo foi recebido.');
   }
@@ -134,7 +159,7 @@ export async function processarLogo(buffer) {
     throw erros.regraNegocio(
       `A imagem tem ${(buffer.length / 1024 / 1024).toFixed(1)} MB e o limite e ${mb} MB. ` +
         'Reduza a imagem e tente novamente.',
-      'LOGO_MUITO_GRANDE',
+      `${codigoErro}_MUITO_GRANDE`,
     );
   }
 
@@ -143,7 +168,7 @@ export async function processarLogo(buffer) {
   if (!formato || !FORMATOS_ACEITOS.includes(formato)) {
     throw erros.regraNegocio(
       `Formato nao aceito. Envie uma imagem ${FORMATOS_ACEITOS.join(', ')}.`,
-      'LOGO_FORMATO_INVALIDO',
+      `${codigoErro}_FORMATO_INVALIDO`,
     );
   }
 
@@ -165,11 +190,11 @@ export async function processarLogo(buffer) {
     if (!metadados.width || !metadados.height) {
       throw erros.regraNegocio(
         'Nao foi possivel ler as dimensoes da imagem.',
-        'LOGO_ILEGIVEL',
+        `${codigoErro}_ILEGIVEL`,
       );
     }
 
-    lado = ladoAlvo(metadados);
+    lado = ladoAlvo(metadados, ladoMaximo);
 
     /*
      * `rotate()` sem argumento aplica a orientacao EXIF e depois a
@@ -190,7 +215,7 @@ export async function processarLogo(buffer) {
       const candidato = await base.clone().webp({ quality: qualidade }).toBuffer();
 
       if (!bytes || candidato.length < bytes.length) bytes = candidato;
-      if (candidato.length <= ALVO_SAIDA_BYTES) break;
+      if (candidato.length <= alvoBytes) break;
     }
   } catch (erro) {
     // Ja e um erro nosso (dimensoes ilegiveis): propaga como veio.
@@ -203,7 +228,7 @@ export async function processarLogo(buffer) {
      */
     throw erros.regraNegocio(
       'Nao foi possivel ler a imagem. O arquivo pode estar corrompido.',
-      'LOGO_ILEGIVEL',
+      `${codigoErro}_ILEGIVEL`,
       { causa: erro.message },
     );
   }
@@ -213,14 +238,31 @@ export async function processarLogo(buffer) {
    * ainda assim nao gravamos acima do teto da constraint - seria trocar
    * um 422 claro por um 500 do Postgres.
    */
-  if (!bytes || bytes.length > TETO_SAIDA_BYTES) {
+  if (!bytes || bytes.length > tetoBytes) {
     throw erros.regraNegocio(
       'Nao foi possivel reduzir a imagem o suficiente. Tente outra imagem.',
-      'LOGO_NAO_REDUZIU',
+      `${codigoErro}_NAO_REDUZIU`,
     );
   }
 
   return { bytes, mime: 'image/webp', formatoEntrada: formato, lado };
 }
 
-export default { processarLogo, FORMATOS_ACEITOS, LIMITE_ENTRADA_BYTES };
+/* Atalho para a logo da propriedade - o comportamento de sempre. */
+export function processarLogo(buffer) {
+  return processarImagem(buffer, PERFIS.logo);
+}
+
+/* Atalho para o avatar do usuario. */
+export function processarAvatar(buffer) {
+  return processarImagem(buffer, PERFIS.avatar);
+}
+
+export default {
+  processarImagem,
+  processarLogo,
+  processarAvatar,
+  PERFIS,
+  FORMATOS_ACEITOS,
+  LIMITE_ENTRADA_BYTES,
+};

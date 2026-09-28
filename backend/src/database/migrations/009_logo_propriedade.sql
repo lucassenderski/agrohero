@@ -24,7 +24,7 @@
 --      para migrar depois, sem mudar o resto do desenho.
 --
 --   3. A imagem e reamostrada e reencodada ANTES de chegar aqui (ver
---      `services/logoService.js`): no maximo 800x800 em WebP q82, o
+--      `services/imagemService.js`): no maximo 800x800 em WebP q82, o
 --      que na pratica fica em torno de 150 KB. Uma foto de celular de
 --      9 MB vira isso - medido, 98% de reducao. O banco gratuito do
 --      Neon tem 0,5 GB, entao sao centenas de logos dentro do limite.

@@ -4,6 +4,7 @@ import { gerarHashSenha, conferirSenha } from '../utils/senha.js';
 import { gerarToken } from '../utils/token.js';
 import { AppError, erros } from '../utils/AppError.js';
 import { TIPOS_AUTOCADASTRO } from '../validators/authValidators.js';
+import { comAvatarUrl } from '../utils/avatar.js';
 import logger from '../config/logger.js';
 
 /*
@@ -123,7 +124,8 @@ export async function cadastrar(dados) {
   );
 
   return {
-    usuario,
+    // Mesmo formato do login e do perfil: ver utils/avatar.js.
+    usuario: comAvatarUrl(usuario),
     token: gerarToken(usuario),
   };
 }
@@ -182,7 +184,13 @@ export async function login({ email, senha }) {
   logger.info({ usuarioId: usuario.id }, 'Login realizado');
 
   return {
-    usuario: usuarioSeguro,
+    /*
+     * O avatar_url tambem e derivado aqui, e nao so no perfil: sem isto,
+     * quem tem foto entraria na conta e o cabecalho mostraria as iniciais
+     * ate a pagina ser recarregada. As tres respostas de usuario (login,
+     * cadastro, perfil) passam pelo mesmo util - ver utils/avatar.js.
+     */
+    usuario: comAvatarUrl(usuarioSeguro),
     token: gerarToken(usuarioSeguro),
   };
 }

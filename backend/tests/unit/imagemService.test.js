@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import {
   processarLogo,
   LIMITE_ENTRADA_BYTES,
-} from '../../src/services/logoService.js';
+} from '../../src/services/imagemService.js';
 
 /*
  * Testes do processador de logo.
