@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listarCategorias, listarProdutos } from '../services/catalogo.js';
 import { useRequisicao } from '../hooks/useRequisicao.js';
@@ -9,7 +9,6 @@ import ProductGrid from '../components/ProductGrid.jsx';
 import { MensagemErro } from '../components/ui.jsx';
 import './Home.css';
 export default function Home() {
-  const [estado, setEstado] = useState({ status: 'carregando' });
   const { autenticado, ehCliente } = useAuth();
   const { adicionar } = useCarrinho();
   const { sucesso, erro: notificarErro } = useNotificacao();
@@ -25,42 +24,6 @@ export default function Home() {
   );
   const { dados: categoriasDados } = useRequisicao(() => listarCategorias(), []);
   const categorias = categoriasDados || [];
-
-  useEffect(() => {
-    let cancelado = false;
-
-    // O /health fica fora do /api/v1, entao montamos a URL sem o sufixo.
-    const urlBase = (import.meta.env.VITE_API_URL ).replace(
-      /\/api\/v1\/?$/,
-      '',
-    );
-
-    fetch(`${urlBase}/health`)
-      .then(async (resposta) => {
-        const corpo = await resposta.json();
-        if (cancelado) return;
-        if (resposta.ok && corpo?.dados?.banco === 'ok') {
-          setEstado({ status: 'ok', dados: corpo.dados });
-        } else {
-          setEstado({
-            status: 'erro',
-            mensagem:
-              corpo?.erro?.mensagem || 'A API respondeu, mas o banco esta indisponivel.',
-          });
-        }
-      })
-      .catch(() => {
-        if (cancelado) return;
-        setEstado({
-          status: 'erro',
-          mensagem: 'Nao foi possivel falar com a API. Verifique se o servidor esta no ar.',
-        });
-      });
-
-    return () => {
-      cancelado = true;
-    };
-  }, []);
 
   const adicionarAoCarrinho = useCallback(
     async (produto) => {
@@ -103,10 +66,10 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="home__diagnostico" aria-live="polite">
+      <section className="home__categorias-secao">
         <div>
           <p className="home__eyebrow">Tudo que sua mesa precisa</p>
-          <h2 className="home__diagnostico-titulo">Escolha por categoria</h2>
+          <h2 className="home__categorias-titulo">Escolha por categoria</h2>
         </div>
         <div className="home__categorias">
           <Link to="/produtos" className="home__categoria home__categoria--ativa">
@@ -136,31 +99,6 @@ export default function Home() {
             </Link>
           ))}
         </div>
-
-        {estado.status === 'carregando' && (
-          <p className="home__mensagem">Verificando a conexão com a API...</p>
-        )}
-
-        {estado.status === 'ok' && (
-          <ul className="home__lista">
-            <li>
-              <strong>API:</strong> {estado.dados.api}
-            </li>
-            <li>
-              <strong>PostgreSQL:</strong> {estado.dados.banco}
-            </li>
-            <li>
-              <strong>Ambiente:</strong> {estado.dados.ambiente}
-            </li>
-            <li>
-              <strong>Latencia do banco:</strong> {estado.dados.latenciaBancoMs} ms
-            </li>
-          </ul>
-        )}
-
-        {estado.status === 'erro' && (
-          <p className="home__mensagem home__mensagem--erro">{estado.mensagem}</p>
-        )}
       </section>
 
       <section className="home__proximas">

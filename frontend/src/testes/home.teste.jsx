@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Home from '../pages/Home.jsx';
 import { AuthProvider } from '../contexts/AuthContext.jsx';
@@ -69,5 +69,30 @@ describe('Home > categorias', () => {
 
     const chavesRepetidas = erros.filter((texto) => texto.includes('same key'));
     expect(chavesRepetidas).toEqual([]);
+  });
+
+  /*
+   * Os dados de infraestrutura (API, PostgreSQL, ambiente, latencia) sao
+   * para o rodape, nao para a front page: ao visitante nao interessam.
+   * A home ja os exibiu no bloco "Escolha por categoria", e este teste
+   * existe para que nao voltem. O rodape tem o proprio teste.
+   */
+  it('nao mostra os dados de infraestrutura na front page', async () => {
+    renderizar();
+
+    /*
+     * Espera a API responder antes de assertar: no primeiro render a home
+     * mostra placeholders, e um bloco reintroduzido so apareceria depois
+     * da resposta. Esperamos os placeholders serem substituidos pelas
+     * categorias reais - e o sinal de que a home terminou de carregar.
+     */
+    await waitFor(() =>
+      expect(screen.queryByRole('link', { name: 'Verduras & folhas' })).not.toBeInTheDocument(),
+    );
+
+    expect(screen.queryByText(/^API:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/PostgreSQL/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Ambiente:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Latência do banco/)).not.toBeInTheDocument();
   });
 });
