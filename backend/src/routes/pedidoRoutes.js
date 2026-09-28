@@ -7,6 +7,7 @@ import {
   pedidoIdParamSchema,
   statusItemParamSchema,
   alterarStatusItemSchema,
+  confirmarPagamentoParamSchema,
   listarPedidosQuerySchema,
 } from '../validators/pedidoValidators.js';
 
@@ -72,6 +73,21 @@ router.delete(
   requireRole('agricultor'),
   validar({ params: statusItemParamSchema }),
   pedidoController.cancelarItem,
+);
+
+/*
+ * PATCH /api/v1/pedidos/:id/pagamento/confirmar - recebimento.
+ *
+ * Fica entre as rotas literais do agricultor, junto das outras acoes
+ * dele. O caminho nao colide com `/:id` porque tem mais segmentos, mas
+ * mantê-lo aqui preserva a leitura: primeiro tudo que o produtor faz,
+ * depois as rotas do consumidor.
+ */
+router.patch(
+  '/:id/pagamento/confirmar',
+  requireRole('agricultor'),
+  validar({ params: confirmarPagamentoParamSchema }),
+  pedidoController.confirmarPagamento,
 );
 
 /* --- Rotas do consumidor -------------------------------------------- */

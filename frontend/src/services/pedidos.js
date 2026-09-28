@@ -45,6 +45,18 @@ export async function cancelarItemDoProdutor(pedidoId, itemId) {
   return resposta.dados;
 }
 
+/*
+ * Confirma que o produtor recebeu o pagamento na retirada.
+ *
+ * Sem corpo: o backend identifica o produtor pelo token e usa o valor
+ * que ja registrou no checkout. Nada do que o frontend mandar entraria
+ * na decisao, entao nao ha o que enviar.
+ */
+export async function confirmarPagamentoRecebido(pedidoId) {
+  const resposta = await api.patch(`/pedidos/${pedidoId}/pagamento/confirmar`);
+  return resposta.dados;
+}
+
 /* --- Administracao --- */
 
 export async function listarTodosOsPedidos(filtros = {}) {

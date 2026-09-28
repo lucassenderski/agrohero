@@ -53,8 +53,7 @@ export default function Home() {
         if (cancelado) return;
         setEstado({
           status: 'erro',
-          mensagem:
-            'Nao foi possivel falar com a API. Confira se o backend esta rodando na porta 3001.',
+          mensagem: 'Nao foi possivel falar com a API. Verifique se o servidor esta no ar.',
         });
       });
 
@@ -113,6 +112,10 @@ export default function Home() {
           <Link to="/produtos" className="home__categoria home__categoria--ativa">
             Todos os alimentos
           </Link>
+          {/* Os placeholders abaixo nao tem id (id: null). Como chave, o id
+              daria tres chaves iguais e o React avisa "same key" e deixa o
+              comportamento dos itens indefinido. O nome e unico na lista e
+              serve nos dois casos. */}
           {(categorias.length > 0
             ? categorias.filter((categoria) => categoria.ativo !== false).slice(0, 3)
             : ['Verduras & folhas', 'Legumes & raízes', 'Frutas da estação'].map((nome) => ({
@@ -127,7 +130,7 @@ export default function Home() {
                   : '/categorias'
               }
               className="home__categoria"
-              key={categoria.id}
+              key={categoria.id ?? categoria.nome}
             >
               {categoria.nome}
             </Link>

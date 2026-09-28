@@ -38,7 +38,7 @@ async function esperaViolacao(sql, parametros = []) {
 }
 
 describe('Estrutura criada pelas migrations', () => {
-  it('cria as 11 tabelas de negocio', async () => {
+  it('cria as 12 tabelas de negocio', async () => {
     const { rows } = await pool.query(`
       SELECT tablename FROM pg_tables
        WHERE schemaname = 'public' AND tablename <> 'migrations'
@@ -55,6 +55,7 @@ describe('Estrutura criada pelas migrations', () => {
       'pedido_itens',
       'pedidos',
       'produtos',
+      'tokens_redefinicao_senha',
       'usuarios',
     ]);
   });
@@ -388,11 +389,22 @@ describe('Seguranca: pagamentos nunca guardam dados de cartao', () => {
     `);
     const colunas = rows.map((r) => r.column_name);
 
-    // Se algum dia alguem adicionar essas colunas, este teste falha de
-    // proposito: guardar dado de cartao e responsabilidade do gateway.
+    /*
+     * Se algum dia alguem adicionar essas colunas, este teste falha de
+     * proposito. Sem gateway, guardar dado de cartao seria ainda pior:
+     * nao ha provedor para onde repassar a responsabilidade, e o dado
+     * ficaria parado no nosso banco.
+     */
     expect(colunas).not.toContain('numero_cartao');
     expect(colunas).not.toContain('cvv');
     expect(colunas).not.toContain('cartao');
-    expect(colunas).toContain('identificador_externo');
+
+    /*
+     * Nao ha mais coluna de gateway. `identificador_externo` (id da
+     * transacao no provedor) e `resumo_gateway` sairam na migration 008:
+     * o pagamento na retirada nao tem transacao externa para registrar.
+     */
+    expect(colunas).not.toContain('identificador_externo');
+    expect(colunas).not.toContain('resumo_gateway');
   });
 });

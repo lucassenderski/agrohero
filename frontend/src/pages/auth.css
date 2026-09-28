@@ -113,21 +113,12 @@
   }
 }
 
-.produtor-perfil__imagem,
-.produtor-perfil__sem-imagem {
+.produtor-perfil__imagem {
   width: 100%;
   aspect-ratio: 1;
   border-radius: var(--raio-lg);
   object-fit: cover;
   background-color: var(--cor-primaria-50);
-}
-
-.produtor-perfil__sem-imagem {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 4rem;
-  color: var(--cor-primaria-300);
 }
 
 .produtor-perfil__dados {
@@ -181,20 +172,11 @@
   text-decoration: none;
 }
 
-.produtor-card__imagem,
-.produtor-card__sem-imagem {
+.produtor-card__imagem {
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   background-color: var(--cor-primaria-50);
-}
-
-.produtor-card__sem-imagem {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.5rem;
-  color: var(--cor-primaria-300);
 }
 
 .produtor-card__corpo {

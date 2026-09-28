@@ -74,20 +74,11 @@ app.use(
  * Um limite generoso vira vetor de negacao de servico (envio de um
  * payload gigante consome memoria do processo).
  *
- * `verify` guarda os BYTES originais em `req.rawBody`. O webhook de
- * pagamento assina o corpo bruto, e re-serializar o objeto parseado
- * mudaria espacos, ordem de chaves e formato de numero - a assinatura
- * deixaria de bater mesmo para um corpo legitimo. Guardar os bytes custa
- * uma copia do corpo e resolve isso de forma definitiva.
+ * Nao ha `verify` guardando os bytes brutos: ele existia so para o
+ * webhook de pagamento verificar a assinatura HMAC do corpo original.
+ * Sem gateway nem webhook, ninguem le o corpo cru.
  */
-app.use(
-  express.json({
-    limit: '1mb',
-    verify: (req, res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 /* Log de requisicoes, com senha e token censurados (ver config/logger.js). */

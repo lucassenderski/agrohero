@@ -2,7 +2,7 @@ import carrinhoRepository from '../repositories/carrinhoRepository.js';
 import enderecoRepository from '../repositories/enderecoRepository.js';
 import pedidoRepository from '../repositories/pedidoRepository.js';
 import { calcularFrete, quantoFaltaParaFreteGratis } from './freteService.js';
-import paymentService from './paymentService.js';
+import { enviarEmailPedidoConfirmado, enviarEmailNovoPedidoProdutor } from './emailService.js';
 import { erros } from '../utils/AppError.js';
 import logger from '../config/logger.js';
 
@@ -27,9 +27,21 @@ import logger from '../config/logger.js';
  *    o ultimo item ao mesmo tempo: o segundo nao encontra linha para
  *    atualizar e a transacao aborta.
  *
- * 3) TUDO OU NADA. Pedido, itens, baixa de estoque, pagamento e limpeza
- *    do carrinho rodam numa transacao unica. Qualquer falha dispara
- *    ROLLBACK e o estado fica exatamente como estava.
+ * 3) TUDO OU NADA. Pedido, itens, baixa de estoque, pagamentos e
+ *    limpeza do carrinho rodam numa transacao unica. Qualquer falha
+ *    dispara ROLLBACK e o estado fica exatamente como estava.
+ *
+ * PAGAMENTO NA RETIRADA
+ *
+ * Nao ha cobranca online. Nenhum gateway e chamado: o pagamento acontece
+ * no local da retirada/entrega, em PIX, cartao ou dinheiro, e quem
+ * confirma o recebimento e o produtor (rota propria no painel dele).
+ *
+ * O checkout apenas REGISTRA quanto cada produtor tem a receber, com
+ * status PENDENTE. O valor por produtor e o que permite a confirmacao
+ * individual: num pedido com itens de dois produtores, cada um confirma
+ * (e recebe) so a sua parte - sem isso, um produtor confirmaria o
+ * recebimento do produto do outro.
  */
 
 /* Motivo de recusa legivel, para a mensagem nao ser generica. */
@@ -276,6 +288,139 @@ export async function previa(usuario, enderecoId) {
 }
 
 /*
+ * Divide o frete entre os produtores do pedido.
+ *
+ * POR QUE DIVIDIR: o frete e cobrado uma vez por pedido, mas o pagamento
+ * e por produtor, e a soma dos pagamentos TEM de fechar com o total -
+ * senao o cliente pagaria um valor na retirada e o pedido mostraria
+ * outro. Cada produtor responde pelo frete na proporcao do que vendeu.
+ *
+ * POR QUE O ULTIMO ABSORVE A SOBRA: dividir valores monetarios em
+ * centavos raramente fecha. R$ 10,00 de frete entre tres produtores da
+ * R$ 3,3333... cada: arredondar os tres para R$ 3,33 deixa R$ 0,01
+ * sobrando. O ultimo produtor recebe o resto (aqui, R$ 3,34), o que
+ * garante `soma === frete` sem depender de arredondamento sortudo. A
+ * ordem e deterministica (a mesma dos itens), para o mesmo pedido sempre
+ * dar a mesma divisao.
+ */
+function dividirFrete(freteTotal, grupos) {
+  const valorProdutos = grupos.reduce((soma, grupo) => soma + grupo.valorProdutos, 0);
+
+  /* Sem frete, ou sem produtos (nao ocorre), nao ha o que dividir. */
+  if (valorProdutos <= 0 || freteTotal <= 0) {
+    return grupos.map(() => 0);
+  }
+
+  const partes = [];
+  let acumulado = 0;
+
+  grupos.forEach((grupo, indice) => {
+    if (indice === grupos.length - 1) {
+      partes.push(Number((freteTotal - acumulado).toFixed(2)));
+      return;
+    }
+
+    const parte = Number(((freteTotal * grupo.valorProdutos) / valorProdutos).toFixed(2));
+    acumulado = Number((acumulado + parte).toFixed(2));
+    partes.push(parte);
+  });
+
+  return partes;
+}
+
+/*
+ * Agrupa os itens por produtor, na ordem em que aparecem.
+ *
+ * A ordem importa: `dividirFrete` usa a posicao do ultimo grupo para
+ * absorver a sobra do arredondamento, entao uma ordem instavel daria
+ * divisoes diferentes para o mesmo pedido.
+ */
+function agruparPorAgricultor(itens) {
+  const grupos = new Map();
+
+  for (const item of itens) {
+    if (!grupos.has(item.agricultorId)) {
+      grupos.set(item.agricultorId, { agricultorId: item.agricultorId, valorProdutos: 0 });
+    }
+
+    grupos.get(item.agricultorId).valorProdutos = Number(
+      (grupos.get(item.agricultorId).valorProdutos + item.subtotal).toFixed(2),
+    );
+  }
+
+  return [...grupos.values()];
+}
+
+/*
+ * Envia os avisos de um pedido recem-criado.
+ *
+ * Duas comunicacoes independentes, cada uma com o SEU publico:
+ *
+ *   - o consumidor recebe a confirmacao, com o total do pedido dele;
+ *   - cada produtor recebe um aviso com APENAS os itens e o valor dele.
+ *
+ * Roda fora da transacao e nunca lanca (ver emailService). Uma falha de
+ * e-mail e registrada e nao impede a resposta de sucesso: o pedido ja
+ * existe e o produtor ve o item no painel de qualquer forma.
+ *
+ * Cada envio e isolado: se o e-mail do consumidor falhar, os produtores
+ * ainda sao avisados, e vice-versa.
+ */
+async function notificarPedidoCriado(usuario, pedido, pagamentos) {
+  try {
+    const porAgricultor = await pedidoRepository.listarProdutoresParaNotificar(pedido.id);
+    const pagamentoDoProdutor = new Map(
+      pagamentos.map((pagamento) => [pagamento.agricultor_id, pagamento]),
+    );
+
+    /*
+     * allSettled, e nao all: se o e-mail do produtor A falhar, o do B
+     * ainda sai. Cada aviso e independente.
+     */
+    await Promise.allSettled([
+      enviarEmailPedidoConfirmado({
+        email: usuario.email,
+        pedido: {
+          id: pedido.id,
+          valor_produtos: Number(pedido.valor_produtos),
+          valor_frete: Number(pedido.valor_frete),
+          valor_total: Number(pedido.valor_total),
+        },
+        pagamentos: porAgricultor.map((produtor) => {
+          const pagamento = pagamentoDoProdutor.get(produtor.agricultor_id);
+          return {
+            nome_fazenda: produtor.nome_fazenda,
+            valor: pagamento ? Number(pagamento.valor) : 0,
+            metodo: pagamento?.metodo ?? '',
+          };
+        }),
+      }),
+      ...porAgricultor.map((produtor) => {
+        const pagamento = pagamentoDoProdutor.get(produtor.agricultor_id);
+        return enviarEmailNovoPedidoProdutor({
+          email: produtor.email,
+          pedido,
+          pagamento: {
+            valor: pagamento ? Number(pagamento.valor) : 0,
+            metodo: pagamento?.metodo ?? '',
+          },
+          itens: produtor.itens,
+        });
+      }),
+    ]);
+  } catch (erro) {
+    /*
+     * A notificacao e o ULTIMO passo, depois do commit. Um erro aqui
+     * (inclusive na consulta acima) nao pode virar 500: o pedido ja
+     * existe, o estoque ja baixou e o dinheiro ja foi combinado. Falhar a
+     * resposta por causa de um e-mail faria o cliente reenviar a compra -
+     * e comprar duas vezes.
+     */
+    logger.error({ err: erro, pedidoId: pedido.id }, 'Falha ao notificar pedido criado');
+  }
+}
+
+/*
  * FINALIZA A COMPRA.
  *
  * Sequencia dentro da transacao:
@@ -286,20 +431,15 @@ export async function previa(usuario, enderecoId) {
  *   5. cria o pedido
  *   6. insere os itens (com snapshot de preco e de agricultor)
  *   7. BAIXA O ESTOQUE de forma condicional - aborta se faltar
- *   8. cria o registro de pagamento
+ *   8. registra o pagamento de CADA produtor (status PENDENTE)
  *   9. esvazia o carrinho
  *  10. COMMIT
  *
- * O PAGAMENTO E CHAMADO FORA DA TRANSACAO, de proposito. Ele envolve
- * rede e pode demorar; manter uma transacao aberta esperando um terceiro
- * seguraria locks de estoque e conexao do pool. O registro de pagamento
- * e criado dentro (com o status inicial), e o resultado do gateway
- * atualiza depois.
- *
- * Efeito colateral a considerar: se o gateway aprovar e o processo cair
- * antes de gravar, o pagamento fica registrado como pendente e o webhook
- * (ou a consulta de reconciliacao) corrige. E melhor que o inverso
- * (gravar aprovado e nao ter cobrado).
+ * NAO HA PASSO FORA DA TRANSACAO. A versao anterior chamava o gateway
+ * depois do commit, porque a chamada de rede nao podia segurar o lock do
+ * estoque. Sem gateway, o pagamento inteiro e banco: cabe na mesma
+ * transacao e o checkout fica com uma garantia a mais - ou tudo existe,
+ * ou nada existe.
  */
 export async function finalizar(usuario, { enderecoId, metodoPagamento }) {
   const resultado = await pedidoRepository.emTransacao(async (cliente) => {
@@ -360,23 +500,35 @@ export async function finalizar(usuario, { enderecoId, metodoPagamento }) {
       }
     }
 
-    /* 8. Pagamento com status inicial PENDENTE. */
-    const pagamento = await pedidoRepository.criarPagamento(cliente, {
-      pedidoId: pedido.id,
-      metodo: metodoPagamento,
-      status: 'PENDENTE',
-      valor: valorTotal,
-      identificadorExterno: null,
-      resumo: { gateway: paymentService.gatewayAtivo(), etapa: 'criado' },
-    });
+    /*
+     * 8. Pagamento de cada produtor, com status PENDENTE (a receber no
+     * local). O frete vai junto, dividido na proporcao do que cada um
+     * vendeu, para a soma dos pagamentos fechar com o total do pedido.
+     */
+    const grupos = agruparPorAgricultor(itens);
+    const partesDoFrete = dividirFrete(frete.valor, grupos);
+
+    const pagamentos = [];
+    for (const [indice, grupo] of grupos.entries()) {
+      const valor = Number((grupo.valorProdutos + partesDoFrete[indice]).toFixed(2));
+
+      pagamentos.push(
+        await pedidoRepository.criarPagamento(cliente, {
+          pedidoId: pedido.id,
+          agricultorId: grupo.agricultorId,
+          metodo: metodoPagamento,
+          valor,
+        }),
+      );
+    }
 
     /* 9. Carrinho consumido no MESMO commit do pedido. */
     await pedidoRepository.limparCarrinhoDoConsumidor(cliente, usuario.id);
 
-    return { pedido, itens: itensInseridos, pagamento, valorTotal, frete };
+    return { pedido, itens: itensInseridos, pagamentos, valorTotal, frete };
   });
 
-  const { pedido, pagamento, valorTotal } = resultado;
+  const { pedido, pagamentos, valorTotal } = resultado;
 
   logger.info(
     {
@@ -384,61 +536,46 @@ export async function finalizar(usuario, { enderecoId, metodoPagamento }) {
       consumidorId: usuario.id,
       valorTotal,
       itens: resultado.itens.length,
+      produtores: pagamentos.length,
+      metodoPagamento,
     },
     'Pedido criado',
   );
 
   /*
-   * 10. Chamada ao gateway, FORA da transacao.
+   * Avisos pos-commit, FORA da transacao.
    *
-   * Falha aqui NAO desfaz o pedido: o pedido existe e o pagamento fica
-   * PENDENTE, para o cliente tentar de novo. Desfazer um pedido valido
-   * porque a rede oscilou seria pior - o estoque ja foi reservado e o
-   * pedido e real.
+   * Rodam depois que os dados estao gravados, e de proposito nao
+   * bloqueiam a resposta nem podem desfaze-la: `enviar*Email` nunca
+   * lanca. O cliente leva aviso de pedido confirmado; cada produtor
+   * leva o dele, com os proprios itens e o proprio valor.
    */
-  let pagamentoProcessado = null;
+  await notificarPedidoCriado(usuario, pedido, pagamentos);
 
-  try {
-    pagamentoProcessado = await paymentService.processar({
-      valor: valorTotal,
-      metodo: metodoPagamento,
-      pedidoId: pedido.id,
-      descricao: `Pedido #${pedido.id} - AgroHero`,
-      emailPagador: usuario.email,
-    });
-
-    await pedidoRepository.atualizarPagamento(pagamento.id, {
-      status: pagamentoProcessado.status,
-      resumo: pagamentoProcessado.resumo,
-      /*
-       * Grava o id da transacao no gateway. Sem ele, um webhook
-       * posterior nao teria como encontrar este pagamento, e o PIX
-       * ficaria pendente para sempre.
-       */
-      identificadorExterno: pagamentoProcessado.identificadorExterno,
-    });
-  } catch (erro) {
-    /*
-     * Pagamento nao processado: o pedido continua valido e PENDENTE. O
-     * erro e logado com o pedido para permitir reconciliacao manual, mas
-     * NAO propagado - o cliente ja tem um pedido criado e a resposta
-     * precisa refletir isso.
-     */
-    logger.error(
-      { pedidoId: pedido.id, erro: erro.message },
-      'Pedido criado, mas o pagamento nao foi processado',
-    );
-  }
-
+  /*
+   * O checkout NAO confirma pagamento nenhum: o dinheiro ainda nao
+   * mudou de mao. O status PENDENTE e o estado correto de "a receber na
+   * retirada", e quem o muda e o produtor, no painel dele.
+   */
   return {
     pedido,
-    pagamento: {
+    pagamentos: pagamentos.map((pagamento) => ({
       id: pagamento.id,
+      agricultor_id: pagamento.agricultor_id,
       metodo: pagamento.metodo,
-      status: pagamentoProcessado?.status ?? 'PENDENTE',
-      valor: valorTotal,
-      mensagem: pagamentoProcessado?.mensagem ?? 'Pagamento pendente de confirmacao.',
-      dados_pagamento: pagamentoProcessado?.dadosPagamento ?? null,
+      status: pagamento.status,
+      valor: Number(pagamento.valor),
+    })),
+    /*
+     * Resumo para o frontend exibir sem recalcular: quanto falta pagar e
+     * quantos produtores serao pagos na retirada.
+     */
+    pagamento_resumo: {
+      total: Number(valorTotal),
+      a_pagar: Number(valorTotal),
+      status: pagamentos.every((p) => p.status === 'PAGO') ? 'PAGO' : 'PENDENTE',
+      produtores: pagamentos.length,
+      instrucao: 'O pagamento e feito na retirada ou entrega, direto ao produtor.',
     },
     frete: {
       valor: resultado.frete.valor,

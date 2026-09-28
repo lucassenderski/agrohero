@@ -46,24 +46,6 @@ const ambienteSchema = z.object({
   RATE_LIMIT_MAX_REQUISICOES: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_MAX_LOGIN: z.coerce.number().int().positive().default(10),
 
-  PAYMENT_GATEWAY: z.enum(['fake', 'mercadopago']).default('fake'),
-  MERCADOPAGO_ACCESS_TOKEN: z.string().optional().default(''),
-  MERCADOPAGO_WEBHOOK_SECRET: z.string().optional().default(''),
-
-  /*
-   * Segredo usado para verificar a assinatura HMAC dos webhooks de
-   * pagamento (`x-agrohero-signature`). Sem ele, o webhook e RECUSADO.
-   *
-   * Curto de proposito (16) para o ambiente de desenvolvimento aceitar um
-   * valor simples, mas diferente de JWT_SECRET: rotacionar o segredo do
-   * webhook nao precisa invalidar as sessoes dos usuarios.
-   */
-  PAYMENT_WEBHOOK_SECRET: z
-    .string()
-    .min(16, 'PAYMENT_WEBHOOK_SECRET deve ter no minimo 16 caracteres')
-    .optional()
-    .default(''),
-
   STORAGE_DRIVER: z.enum(['local', 'cloudinary']).default('local'),
   CLOUDINARY_CLOUD_NAME: z.string().optional().default(''),
   CLOUDINARY_API_KEY: z.string().optional().default(''),

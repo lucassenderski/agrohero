@@ -20,7 +20,7 @@ export default function Footer() {
         <div>
           <h2>Segurança & deploy</h2>
           <span>Cadastro seguro & LGPD</span>
-          <span>Pagamento facilitado via PIX & cartão</span>
+          <span>Pagamento na retirada: PIX, cartao ou dinheiro</span>
           <span>© {ano} Agro Hero</span>
         </div>
       </div>

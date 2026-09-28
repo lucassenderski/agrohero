@@ -90,4 +90,31 @@ export const cancelarItem = asyncHandler(async (req, res) => {
   return respostaSucesso(res, resultado);
 });
 
-export default { listar, obter, cancelar, alterarStatusItem, cancelarItem };
+/*
+ * PATCH /pedidos/:id/pagamento/confirmar - agricultor confirma que
+ * recebeu o pagamento na retirada.
+ *
+ * PATCH e nao POST: o pagamento ja existe (foi criado no checkout), e
+ * esta rota muda o STATUS dele. Criar um recurso novo seria mentir sobre
+ * o que aconteceu - nao ha uma segunda cobranca.
+ *
+ * O corpo e vazio: o agricultor vem do token e o valor foi decidido no
+ * checkout. Nada do que o cliente ou o produtor mandarem no corpo entra
+ * na decisao (ver o schema em pedidoValidators.js).
+ */
+export const confirmarPagamento = asyncHandler(async (req, res) => {
+  const { id } = req.dadosValidados.params;
+
+  const resultado = await pedidoService.confirmarPagamento(req.usuario, id);
+
+  return respostaSucesso(res, resultado);
+});
+
+export default {
+  listar,
+  obter,
+  cancelar,
+  alterarStatusItem,
+  cancelarItem,
+  confirmarPagamento,
+};

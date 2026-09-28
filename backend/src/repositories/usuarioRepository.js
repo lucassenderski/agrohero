@@ -14,9 +14,15 @@ import { RepositorioBase } from './RepositorioBase.js';
  * senha_hash fica FORA desta lista de proposito. Um erro de programacao
  * que devolvesse o objeto inteiro do repositorio vazaria o hash; com a
  * lista explicita, o pior caso vaza apenas dados ja publicos.
+ *
+ * `tem_avatar` e uma expressao, e nao uma coluna: diz se existe foto sem
+ * trazer os bytes. E o que o perfil precisa para montar (ou nao) a URL do
+ * avatar, e evita carregar dezenas de KB em toda leitura - inclusive na
+ * checagem de token, que roda a cada requisicao autenticada.
  */
 const COLUNAS_PUBLICAS = `
   id, nome, email, telefone, cidade, estado, tipo, ativo,
+  (avatar_bytes IS NOT NULL) AS tem_avatar,
   criado_em, atualizado_em
 `;
 
@@ -139,6 +145,65 @@ export class UsuarioRepository extends RepositorioBase {
       [id, ativo],
     );
     return linhas[0] ?? null;
+  }
+
+  /*
+   * Avatar do usuario.
+   *
+   * Metodos proprios, e nao colunas acrescentadas a COLUNAS_PUBLICAS: os
+   * BYTES do avatar nao tem por que viajar em toda leitura de perfil,
+   * listagem administrativa ou checagem de token. `checkJwt` usa
+   * `buscarPorId` a cada requisicao autenticada - trazer a imagem junto
+   * seria carregar dezenas de KB do banco em toda chamada da API para
+   * jogar fora em seguida.
+   *
+   * A leitura devolve `tem_avatar` (booleano), que e o que as telas
+   * precisam para decidir entre a foto e as iniciais.
+   */
+  async salvarAvatar(id, { bytes, mime }) {
+    const linhas = await this.executar(
+      `UPDATE usuarios
+          SET avatar_bytes = $2, avatar_mime = $3
+        WHERE id = $1
+      RETURNING id`,
+      [id, bytes, mime],
+    );
+    return linhas[0] ?? null;
+  }
+
+  /* Remove o avatar; o usuario volta a usar as iniciais. */
+  async limparAvatar(id) {
+    const linhas = await this.executar(
+      `UPDATE usuarios
+          SET avatar_bytes = NULL, avatar_mime = NULL
+        WHERE id = $1
+      RETURNING id`,
+      [id],
+    );
+    return linhas[0] ?? null;
+  }
+
+  /*
+   * Le o avatar para servir ao proprio dono.
+   *
+   * Retorna `null` quando o usuario nunca enviou foto - o chamador
+   * responde 404 e o frontend usa as iniciais. Nao lanca
+   * `naoEncontrado` aqui: nao ter avatar e um caso NORMAL, nao um erro.
+   */
+  async buscarAvatar(id) {
+    const linhas = await this.executar(
+      `SELECT avatar_bytes, avatar_mime, atualizado_em
+         FROM usuarios
+        WHERE id = $1`,
+      [id],
+    );
+    const linha = linhas[0];
+    if (!linha || !linha.avatar_bytes) return null;
+    return {
+      bytes: linha.avatar_bytes,
+      mime: linha.avatar_mime,
+      atualizadoEm: linha.atualizado_em,
+    };
   }
 }
 

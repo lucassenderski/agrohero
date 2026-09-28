@@ -83,7 +83,24 @@ export async function requisicao(caminho, { metodo = 'GET', corpo, params } = {}
   const token = obterToken();
 
   const cabecalhos = { Accept: 'application/json' };
-  if (corpo !== undefined) cabecalhos['Content-Type'] = 'application/json';
+
+  /*
+   * `FormData` (upload de arquivo) e tratado diferente do JSON.
+   *
+   * Dois pontos, e errar qualquer um quebra o upload:
+   *
+   *   1. NAO serializamos: `JSON.stringify(formData)` vira "{}" e o
+   *      arquivo nunca sai. O corpo vai como esta.
+   *   2. NAO definimos Content-Type. O multipart precisa de um
+   *      `boundary` que separa as partes, e so o browser sabe gera-lo -
+   *      ele cria o cabecalho sozinho, com o boundary correto, desde que
+   *      nao mandemos um Content-Type por cima. Definir
+   *      'multipart/form-data' na mao produz um cabecalho SEM boundary, e
+   *      o backend responde "Boundary not found".
+   */
+  const ehFormData = typeof FormData !== 'undefined' && corpo instanceof FormData;
+
+  if (corpo !== undefined && !ehFormData) cabecalhos['Content-Type'] = 'application/json';
   if (token) cabecalhos.Authorization = `Bearer ${token}`;
 
   const url = `${URL_BASE}${caminho}${montarQueryString(params)}`;
@@ -93,7 +110,7 @@ export async function requisicao(caminho, { metodo = 'GET', corpo, params } = {}
     resposta = await fetch(url, {
       method: metodo,
       headers: cabecalhos,
-      body: corpo !== undefined ? JSON.stringify(corpo) : undefined,
+      body: corpo === undefined ? undefined : ehFormData ? corpo : JSON.stringify(corpo),
     });
   } catch {
     // Falha de rede (servidor fora do ar, sem internet, CORS bloqueado).

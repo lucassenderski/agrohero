@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { listarItensDoProdutor, alterarStatusDoItem } from '../services/pedidos.js';
+import {
+  listarItensDoProdutor,
+  alterarStatusDoItem,
+  confirmarPagamentoRecebido,
+} from '../services/pedidos.js';
 import { useNotificacao } from '../contexts/NotificacaoContext.jsx';
 import { Carregando, MensagemErro, EstadoVazio, Paginacao, Selo } from '../components/ui.jsx';
 import {
@@ -7,6 +11,7 @@ import {
   formatarDataHora,
   formatarQuantidade,
   rotularStatusPedido,
+  rotularStatusPagamento,
   classeStatusPedido,
 } from '../utils/formato.js';
 import '../components/pedido.css';
@@ -86,6 +91,32 @@ export default function AgricultorPedidos() {
     }
   }
 
+  /*
+   * Confirma o recebimento do pagamento deste pedido.
+   *
+   * A chave de ocupado e o ID do PEDIDO com prefixo, e nao o do item: a
+   * acao e por pedido (o pagamento e unico por produtor dentro dele), e
+   * um pedido aparece em varias linhas da tabela. Sem o prefixo, o
+   * bloqueio de um item acenderia o botao dos outros do mesmo pedido -
+   * ou colidiria com um item de ID igual.
+   */
+  async function confirmarPagamento(pedidoId) {
+    setOcupado(`pagamento-${pedidoId}`);
+    try {
+      const resultado = await confirmarPagamentoRecebido(pedidoId);
+      sucesso(
+        resultado.ja_estava_pago
+          ? 'Este pagamento ja constava como recebido.'
+          : 'Recebimento confirmado. Obrigado!',
+      );
+      await carregar();
+    } catch (falha) {
+      notificarErro(falha.mensagem || 'Nao foi possivel confirmar o recebimento.');
+    } finally {
+      setOcupado(null);
+    }
+  }
+
   if (carregando && itens.length === 0) {
     return <Carregando texto="Carregando seus pedidos..." />;
   }
@@ -143,8 +174,9 @@ export default function AgricultorPedidos() {
                   <th>Qtd</th>
                   <th>Subtotal</th>
                   <th>Situacao</th>
+                  <th>Pagamento</th>
                   <th>Entrega</th>
-                  <th>Acao</th>
+                  <th>Acoes</th>
                 </tr>
               </thead>
               <tbody>
@@ -164,23 +196,64 @@ export default function AgricultorPedidos() {
                       </Selo>
                     </td>
                     <td>
+                      {item.pagamento_status ? (
+                        <>
+                          <Selo
+                            variante={classeStatusPedido(item.pagamento_status).replace(
+                              'selo--',
+                              '',
+                            )}
+                          >
+                            {rotularStatusPagamento(item.pagamento_status)}
+                          </Selo>
+                          <br />
+                          <span className="campo__dica">
+                            {item.pagamento_metodo} · {formatarMoeda(item.pagamento_valor)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="campo__dica">-</span>
+                      )}
+                    </td>
+                    <td>
                       {item.endereco_entrega
                         ? `${item.endereco_entrega.cidade}/${item.endereco_entrega.estado}`
                         : '-'}
                     </td>
                     <td>
-                      {PROXIMO[item.status] ? (
-                        <button
-                          type="button"
-                          className="botao botao--secundario"
-                          disabled={ocupado === item.id}
-                          onClick={() => avancar(item)}
-                        >
-                          {ocupado === item.id ? 'Atualizando...' : ROTULO_ACAO[item.status]}
-                        </button>
-                      ) : (
-                        <span className="campo__dica">Sem acao</span>
-                      )}
+                      <div className="tabela__acoes">
+                        {PROXIMO[item.status] ? (
+                          <button
+                            type="button"
+                            className="botao botao--secundario"
+                            disabled={ocupado === item.id}
+                            onClick={() => avancar(item)}
+                          >
+                            {ocupado === item.id ? 'Atualizando...' : ROTULO_ACAO[item.status]}
+                          </button>
+                        ) : (
+                          <span className="campo__dica">Sem acao</span>
+                        )}
+
+                        {/*
+                          O botao de recebimento so aparece para pagamento
+                          ainda PENDENTE. Um pagamento ja PAGO nao precisa
+                          de acao, e oferecer o botao convidaria a um clique
+                          que nao faz nada.
+                        */}
+                        {item.pagamento_status === 'PENDENTE' && (
+                          <button
+                            type="button"
+                            className="botao botao--primario"
+                            disabled={ocupado === `pagamento-${item.pedido_id}`}
+                            onClick={() => confirmarPagamento(item.pedido_id)}
+                          >
+                            {ocupado === `pagamento-${item.pedido_id}`
+                              ? 'Confirmando...'
+                              : 'Confirmar recebimento'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -88,27 +88,26 @@ Essa ida e volta é normal: os dois serviços se referenciam, e um dos dois prec
 
 O backend **recusa subir** em produção com segredos de exemplo. Isso é uma guarda em `src/config/verificacaoProducao.js`, e ela existe porque o `.env.example` tem valores de modelo que passariam na validação de tamanho — alguém poderia publicar com o `JWT_SECRET` do repositório, e qualquer pessoa forjar um token de administrador.
 
-Gere dois valores aleatórios:
+Gere um valor aleatório:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
 
-Rode o comando **duas vezes**: um valor para `JWT_SECRET`, outro para `PAYMENT_WEBHOOK_SECRET`. Não reaproveite o mesmo.
-
 | Variável | Valor |
 |---|---|
 | `DATABASE_URL` | a connection string do Neon (com `?sslmode=require`) |
 | `JWT_SECRET` | valor aleatório gerado acima |
-| `PAYMENT_WEBHOOK_SECRET` | outro valor aleatório, diferente do anterior |
 | `CORS_ORIGINS` | a URL do frontend no Render, com `https://` |
 | `RATE_LIMIT_MAX_LOGIN` | opcional; padrão 10. Suba para ~30 se for demonstrar o sistema |
 
 As três regras que o backend verifica em produção, e que fazem o processo morrer na subida se violadas:
 
-- `JWT_SECRET` e `PAYMENT_WEBHOOK_SECRET` não podem conter `troque`, `placeholder`, `changeme`, `sua_chave` ou `example`;
+- `JWT_SECRET` não pode conter `troque`, `placeholder`, `changeme`, `sua_chave` ou `example`;
 - `CORS_ORIGINS` não pode conter `*`;
 - `CORS_ORIGINS` não pode usar `http://` — em produção, só `https://`.
+
+> Não há segredo de gateway de pagamento. O pagamento é feito na retirada ou entrega, direto ao produtor (ver a seção 9).
 
 ---
 
@@ -152,7 +151,7 @@ npm run migrate && npm run seed && npm start
 
 5. **Volte o Start Command** para `npm run migrate && npm start`.
 
-> **O seed também passa pela guarda de produção.** Se `JWT_SECRET`, `PAYMENT_WEBHOOK_SECRET` ou `CORS_ORIGINS` estiverem com valor de exemplo, o seed encerra com código 1 e **não cria nada** — a mesma guarda do `src/config/verificacaoProducao.js` roda no seed, porque ele importa o `env.js`. Nesse caso ele imprime a lista de problemas e sai; corrija as variáveis antes de tentar de novo. Como o `&&` no comando de start propaga a falha, o deploy aparece como falho, o que é o comportamento desejado: melhor falhar do que subir sem administrador.
+> **O seed também passa pela guarda de produção.** Se `JWT_SECRET` ou `CORS_ORIGINS` estiverem com valor de exemplo, o seed encerra com código 1 e **não cria nada** — a mesma guarda do `src/config/verificacaoProducao.js` roda no seed, porque ele importa o `env.js`. Nesse caso ele imprime a lista de problemas e sai; corrija as variáveis antes de tentar de novo. Como o `&&` no comando de start propaga a falha, o deploy aparece como falho, o que é o comportamento desejado: melhor falhar do que subir sem administrador.
 
 O passo 5 não é opcional: deixar o seed no start faz ele rodar em todo deploy. Como é idempotente não haveria dano, mas também não haveria motivo — e um restart acidental do serviço não deve mexer no banco sem necessidade.
 
@@ -203,8 +202,8 @@ Faça o percurso inteiro, que é o mesmo da apresentação:
 3. **Produtor** — cadastre um produto com preço e estoque.
 4. **Vitrine** — o produto aparece na listagem; use a busca e os filtros.
 5. **Carrinho** — adicione o produto.
-6. **Checkout** — finalize o pedido (com `PAYMENT_GATEWAY=fake`, o pagamento é simulado e aprovado).
-7. **Pedidos** — o produtor vê o pedido, altera o status até `ENTREGUE`.
+6. **Checkout** — finalize o pedido escolhendo PIX, cartão ou dinheiro. O pagamento é feito na retirada, não no site.
+7. **Pedidos** — o produtor vê o pedido, confirma o recebimento do pagamento e altera o status até `ENTREGUE`.
 8. **Avaliação** — o consumidor avalia o produto.
 
 Se o passo 4 não mostrar o produto, o problema costuma ser o `CORS_ORIGINS` (veja abaixo).
@@ -306,12 +305,43 @@ git push origin main
 
 Prefira `git revert` a `git reset --hard`: o reset reescreve a história e exigiria `push --force`, que apaga o commit do servidor e dificulta recuperá-lo depois.
 
-**Sobre a marca de versão.** Ainda não há tag neste repositório (`git tag -l` não devolve nada). Uma tag no commit que está no ar é a forma mais direta de nomear "a versão boa" e poder voltar a ela pelo nome:
+**Sobre a marca de versão.** A tag existe: `v1.0.0-producao` aponta para `c2a97a3` e já foi publicada em `origin`. É o nome de "a versão boa" e o alvo do rollback. Para conferir ou recriar:
 
 ```bash
-git tag -a v1.0.0-producao c2a97a3 -m "Versao em producao em 2026-09-21"
-git push origin v1.0.0-producao
+git tag -l                                   # deve listar v1.0.0-producao
+git rev-list -n1 v1.0.0-producao             # deve imprimir c2a97a3...
 ```
+
+Para o deploy da refatoração de pagamento (pagamento na retirada, sem gateway), o procedimento é:
+
+1. antes de publicar, rodar as suítes e guardar o resultado (backend `npm test`, frontend `npx vitest run` - ver a ordem em `AGENTS.md`, o teste do backend esvazia `categorias`);
+2. publicar a branch `feature/pagina-receitas` (ou o merge dela na `main`);
+3. conferir o artefato publicado, como acima;
+4. se algo der errado, **Redeploy** de `c2a97a3` no painel do `agrohero-web` e do `agrohero-api`. Isso volta o código e os artefatos. **Atenção ao banco:** a `008` aplicada pela versão nova altera o schema (remove as colunas do gateway, adiciona `agricultor_id`, troca as constraints), e o código antigo (`c2a97a3`) **não** é compatível com esse schema - ele grava `identificador_externo` e `resumo_gateway`, que a `008` apaga. Voltar o código sem voltar o banco deixa o checkout antigo quebrado. Se precisar reverter de verdade, o ponto de restauração é o **backup do Neon feito antes do deploy** (branch/restore point), não só o Redeploy.
+
+> **A `008` mexe no banco e o `startCommand` é `npm run migrate && npm start`.** O `DROP COLUMN` das colunas do gateway é irreversível, e a migration tem uma **pré-condição que não é óbvia**: `pagamentos` precisa estar **sem linhas**. Verificado em dev e teste (ambos zerados). Se a produção tiver **qualquer** linha em `pagamentos` com o vocabulário antigo, a migration falha e o deploy **aborta** (o `&&` impede o servidor de subir; a versão antiga continua no ar). O erro é:
+>
+> ```
+> check constraint "pagamentos_metodo_valido" of relation "pagamentos" is violated by some row
+> ```
+>
+> Repro: banco com as migrations 001-007, um pagamento `BOLETO`/`APROVADO`, rodar a `008`. Falha no `ADD CONSTRAINT pagamentos_metodo_valido`, que valida as linhas existentes contra `IN ('PIX','CARTAO','DINHEIRO')`. As colunas do gateway já teriam sido removidas antes, mas a migration roda em transação própria, então **nada é aplicado**.
+>
+> **Se a produção tiver linhas em `pagamentos`, normalizar ANTES de publicar** (e fazer backup do Neon como rede de segurança):
+>
+> ```sql
+> -- 1. conferir o que existe
+> SELECT metodo, status, count(*) FROM pagamentos GROUP BY 1, 2;
+> -- 2. alinhar ao vocabulario novo, preservando o que ja aconteceu
+> UPDATE pagamentos SET metodo = 'CARTAO' WHERE metodo IN ('BOLETO', 'SIMULADO');
+> UPDATE pagamentos SET status = 'PAGO'   WHERE status IN ('APROVADO', 'REEMBOLSADO');
+> UPDATE pagamentos SET status = 'PENDENTE' WHERE status = 'RECUSADO';
+> -- 3. conferir que sobrou so PIX/CARTAO/DINHEIRO e PENDENTE/PAGO/CANCELADO
+> SELECT DISTINCT metodo FROM pagamentos;
+> SELECT DISTINCT status FROM pagamentos;
+> ```
+>
+> Note que a `008` também **zera `identificador_externo`** - se houver linhas, a conciliação com o Mercado Pago se perde. O `APROVADO -> PAGO` é o mapeamento honesto (aprovaram, então está pago), mas um `RECUSADO -> PENDENTE` volta a cobrar a retirada de quem teve o pagamento recusado. Se houver esse caso, decidir linha a linha em vez de rodar o `UPDATE` acima.
 
 ---
 

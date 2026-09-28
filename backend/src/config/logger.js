@@ -36,7 +36,6 @@ const caminhosRedigidos = [
   'token',
   'jwt',
   'access_token',
-  'identificador_externo',
 ];
 
 export const logger = pino({

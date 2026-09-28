@@ -1,0 +1,59 @@
+/* Upload da logo da propriedade (produtor). */
+
+.logo-upload {
+  margin-bottom: var(--esp-4);
+}
+
+.logo-upload__conteudo {
+  display: flex;
+  gap: var(--esp-4);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+/*
+ * A previa usa o mesmo recorte das telas publicas (quadrado, cover).
+ * Assim o produtor ve exatamente o enquadramento que o cliente vai ver -
+ * e nao uma versao esticada que some depois.
+ */
+.logo-upload__previa {
+  width: 8rem;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--raio-lg);
+  border: 1px solid var(--cor-borda);
+  background-color: var(--cor-primaria-50);
+  flex-shrink: 0;
+}
+
+.logo-upload__acoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+  flex: 1;
+  min-width: 12rem;
+}
+
+/*
+ * O input de arquivo fica escondido do olhar, mas NAO com display:none.
+ * `display:none` remove o elemento tambem da arvore de acessibilidade;
+ * a tecnica abaixo mantem o input presente para leitores de tela, e o
+ * botao visivel cuida do acionamento por teclado e mouse.
+ */
+.logo-upload__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.logo-upload__botoes {
+  display: flex;
+  gap: var(--esp-2);
+  flex-wrap: wrap;
+}

@@ -1,6 +1,5 @@
 import pedidoRepository from '../repositories/pedidoRepository.js';
 import agricultorRepository from '../repositories/agricultorRepository.js';
-import paymentService from './paymentService.js';
 import { erros } from '../utils/AppError.js';
 import logger from '../config/logger.js';
 import { lerPaginacao, montarPaginacao } from '../utils/paginacao.js';
@@ -148,6 +147,7 @@ export async function obter(usuario, pedidoId) {
       ...pedido,
       itens,
       pagamentos: await pedidoRepository.listarPagamentos(pedidoId),
+      pagamento_resumo: await pedidoRepository.resumoPagamentosDoPedido(pedidoId),
       visao: 'administrador',
     };
   }
@@ -167,6 +167,7 @@ export async function obter(usuario, pedidoId) {
       ...pedido,
       itens,
       pagamentos: await pedidoRepository.listarPagamentos(pedidoId),
+      pagamento_resumo: await pedidoRepository.resumoPagamentosDoPedido(pedidoId),
       visao: 'consumidor',
     };
   }
@@ -203,12 +204,34 @@ export async function obter(usuario, pedidoId) {
      */
     const { valor_produtos, valor_frete, valor_total, ...pedidoVisivel } = pedido;
 
+    /*
+     * O pagamento que este produtor recebe, e SO ele. A lista completa
+     * de `pagamentos` faria o produtor A ver quanto o B recebeu no mesmo
+     * pedido - o mesmo vazamento entre concorrentes que a remocao dos
+     * valores totais acima evita. Por isso vem um pagamento unico
+     * (`meu_pagamento`), buscado por (pedido, agricultor).
+     */
+    const meuPagamento = await pedidoRepository.buscarPagamentoDoAgricultor(
+      pedidoId,
+      agricultor.id,
+    );
+
     return {
       ...pedidoVisivel,
       itens: meusItens,
       valor_dos_meus_itens: Number(
         meusItens.reduce((soma, item) => soma + Number(item.subtotal), 0).toFixed(2),
       ),
+      meu_pagamento: meuPagamento
+        ? {
+            id: meuPagamento.id,
+            metodo: meuPagamento.metodo,
+            status: meuPagamento.status,
+            valor: Number(meuPagamento.valor),
+            criado_em: meuPagamento.criado_em,
+            atualizado_em: meuPagamento.atualizado_em,
+          }
+        : null,
       visao: 'agricultor',
     };
   }
@@ -383,103 +406,67 @@ export async function cancelar(usuario, pedidoId) {
       await pedidoRepository.devolverEstoque(cliente, item.produto_id, item.quantidade);
     }
 
-    return cancelados;
+    /*
+     * Cancela os pagamentos que ainda estavam por receber. Os ja PAGOS
+     * ficam como estao: o dinheiro trocou de mao no balcao e apagar o
+     * registro no banco nao o devolve.
+     */
+    const pagamentosCancelados = await pedidoRepository.cancelarPagamentosPendentes(
+      cliente,
+      pedidoId,
+    );
+
+    return { cancelados, pagamentosCancelados };
   });
 
+  const { cancelados, pagamentosCancelados } = resultado;
+
   logger.info(
-    { pedidoId, consumidorId: pedido.consumidor_id, itensCancelados: resultado.length },
+    {
+      pedidoId,
+      consumidorId: pedido.consumidor_id,
+      itensCancelados: cancelados.length,
+      pagamentosCancelados: pagamentosCancelados.length,
+    },
     'Pedido cancelado',
   );
 
   /*
-   * ESTORNO (FASE 13).
+   * AVISO DE DINHEIRO JA RECEBIDO.
    *
-   * FORA da transacao, de proposito. O estorno e uma chamada HTTP a um
-   * servico externo que pode levar segundos. Faze-lo dentro da
-   * transacao manteria uma conexao do pool aberta e uma linha travada
-   * durante toda a espera - com alguns cancelamentos simultaneos, o pool
-   * esgota e a API inteira para.
+   * Sem gateway nao ha estorno a chamar: o pagamento na retirada e
+   * presencial, e devolver o dinheiro e um ato entre as partes, fora do
+   * sistema. O que o sistema DEVE fazer e nao fingir que o pagamento
+   * sumiu junto com o pedido.
    *
-   * A consequencia e que o estorno pode falhar DEPOIS do cancelamento ja
-   * ter sido confirmado. Nesse caso o cancelamento NAO e desfeito: o
-   * cliente tem o direito de cancelar, e devolver o dinheiro e obrigacao
-   * nossa, nao uma condicao. Devolvemos `estorno_pendente: true` para
-   * operacao saber que aquele pagamento precisa de atencao manual.
+   * Se algum produtor ja havia confirmado o recebimento, o cancelamento
+   * prossegue (o cliente tem o direito de cancelar) mas a resposta
+   * sinaliza que ha dinheiro a acertar com esses produtores. Reportar
+   * isso como dado, e nao como erro, segue a regra do cancelamento: ele
+   * ja aconteceu e nao sera desfeito.
    */
-  const estorno = await tentarEstornarPagamento(pedidoId);
+  const pagamentosPagos = await pedidoRepository.contarPagamentosPagos(pedidoId);
 
   const atualizado = await pedidoRepository.buscarPorId(pedidoId);
 
   return {
     pedido: atualizado,
-    itens_cancelados: resultado.length,
-    estoque_devolvido: resultado.map((item) => ({
+    itens_cancelados: cancelados.length,
+    estoque_devolvido: cancelados.map((item) => ({
       produto_id: item.produto_id,
       quantidade: item.quantidade,
     })),
-    ...estorno,
+    pagamentos_cancelados: pagamentosCancelados.length,
+    ...(pagamentosPagos > 0
+      ? {
+          acerto_pendente: true,
+          motivo: 'PAGAMENTO_JA_RECEBIDO',
+          pagamentos_ja_recebidos: pagamentosPagos,
+          mensagem:
+            'Havia pagamento ja recebido por produtor(es) deste pedido. Como o pagamento e feito na retirada, o acerto do valor e direto com eles.',
+        }
+      : {}),
   };
-}
-
-/*
- * Estorna o pagamento do pedido, se houver um aprovado.
- *
- * Devolve um objeto para compor a resposta:
- *   { estornado: true }                                  -> deu certo
- *   { estorno_pendente: true, motivo }                   -> precisa de acao
- *   {}                                                   -> nada a estornar
- *
- * Por que devolve e nao lanca: o cancelamento ja aconteceu e nao vai ser
- * desfeito por uma falha de estorno. Engolir a falha seria pior - a
- * operacao precisa saber. Entao o resultado sobe como dado, e nao como
- * excecao que abortaria uma operacao ja concluida.
- */
-async function tentarEstornarPagamento(pedidoId) {
-  const pagamento = await pedidoRepository.buscarPagamentoPorPedido(pedidoId);
-
-  /* Nada a estornar: pedido cancelado antes de pagar, ou ja reembolsado. */
-  if (!pagamento || pagamento.status !== 'APROVADO') {
-    return {};
-  }
-
-  try {
-    const resultado = await paymentService.estornar({
-      identificadorExterno: pagamento.identificador_externo,
-      valor: pagamento.valor,
-      motivo: `Pedido #${pedidoId} cancelado`,
-    });
-
-    await pedidoRepository.atualizarPagamento(pagamento.id, {
-      status: 'REEMBOLSADO',
-      resumo: resultado.resumo,
-    });
-
-    logger.info(
-      { pedidoId, pagamentoId: pagamento.id, valor: pagamento.valor },
-      'Pagamento estornado apos cancelamento',
-    );
-
-    return { estornado: true, valor_estornado: Number(pagamento.valor) };
-  } catch (erro) {
-    /*
-     * Falha de estorno com o pedido ja cancelado: e um problema de
-     * dinheiro, nao de pedido. Logamos em nivel de erro com o
-     * identificador da transacao no gateway, que e o que a operacao
-     * precisa para resolver no painel do provedor.
-     */
-    logger.error(
-      {
-        pedidoId,
-        pagamentoId: pagamento.id,
-        identificadorExterno: pagamento.identificador_externo,
-        valor: pagamento.valor,
-        erro: erro.message,
-      },
-      'Falha ao estornar pagamento de pedido cancelado; estorno PENDENTE',
-    );
-
-    return { estorno_pendente: true, motivo: 'FALHA_ESTORNO' };
-  }
 }
 
 /*
@@ -510,6 +497,21 @@ export async function cancelarItemDoAgricultor(usuario, itemId) {
   await pedidoRepository.emTransacao(async (cliente) => {
     await pedidoRepository.alterarStatusItem(agricultor.id, itemId, 'CANCELADO');
     await pedidoRepository.devolverEstoque(cliente, item.produto_id, item.quantidade);
+
+    /*
+     * O pagamento deste produtor cai pelo valor do item cancelado.
+     *
+     * Sem isso, ele receberia na retirada por um produto que nao vai
+     * entregar. `ajustarPagamentoDoAgricultor` so mexe em pagamento ainda
+     * PENDENTE: se ja foi recebido, o acerto e presencial e o sistema nao
+     * inventa um valor negativo.
+     */
+    await pedidoRepository.ajustarPagamentoDoAgricultor(
+      cliente,
+      item.pedido_id,
+      agricultor.id,
+      -Number(item.subtotal),
+    );
   });
 
   logger.info(
@@ -520,6 +522,103 @@ export async function cancelarItemDoAgricultor(usuario, itemId) {
   const pedido = await pedidoRepository.buscarPorId(item.pedido_id);
 
   return { item_id: itemId, pedido_status: pedido?.status ?? null, estoque_devolvido: true };
+}
+
+/*
+ * CONFIRMA O RECEBIMENTO DO PAGAMENTO (agricultor).
+ *
+ * E o unico ponto do sistema que marca um pagamento como PAGO. Como o
+ * pagamento e feito no local, quem tem autoridade para dizer "recebi" e
+ * quem recebeu - o produtor dono daquele pagamento.
+ *
+ * A POSSE E O EIXO DA SEGURANCA: o agricultor vem do token, nunca do
+ * corpo nem da URL. A consulta e por (pedidoId, agricultorId), entao um
+ * produtor nao tem como alcancar o pagamento de outro nem mandando o id
+ * de um pedido alheio - no pior caso ele recebe 404, porque a linha
+ * consultada nao existe para ele.
+ *
+ * A ORDEM DAS CHECAGENS importa: primeiro "tem pagamento meu neste
+ * pedido?" (404 se nao), e so depois as regras de estado. Invertendo, um
+ * produtor de fora receberia "pagamento ja confirmado" a respeito de um
+ * pedido que nao e dele - informacao que nao precisa sair daqui.
+ */
+export async function confirmarPagamento(usuario, pedidoId) {
+  const agricultor = await obterAgricultorDoUsuario(usuario);
+
+  const pagamento = await pedidoRepository.buscarPagamentoDoAgricultor(
+    pedidoId,
+    agricultor.id,
+  );
+
+  if (!pagamento) {
+    throw erros.naoEncontrado('Pagamento');
+  }
+
+  /*
+   * Pedido cancelado: nao ha o que receber. Recusar explicitamente e
+   * melhor que dar baixa num pedido que nao vai ser entregue.
+   */
+  const pedido = await pedidoRepository.buscarPorId(pedidoId);
+
+  if (pedido?.status === 'CANCELADO') {
+    throw erros.regraNegocio(
+      'Este pedido foi cancelado e nao ha pagamento a receber.',
+      'PEDIDO_CANCELADO',
+    );
+  }
+
+  if (pagamento.status === 'PAGO') {
+    /* Idempotente: confirmar de novo nao e erro, e nao muda nada. */
+    return { pagamento, ja_estava_pago: true };
+  }
+
+  if (pagamento.status !== 'PENDENTE') {
+    throw erros.regraNegocio(
+      `O pagamento esta ${pagamento.status} e nao pode ser confirmado.`,
+      'PAGAMENTO_NAO_CONFIRMAVEL',
+    );
+  }
+
+  const atualizado = await pedidoRepository.marcarPagamentoComoPago(pagamento.id);
+
+  /*
+   * Corrida tratada: o UPDATE condicional nao encontrou a linha PENDENTE
+   * porque outra requisicao confirmou no meio. Nao e erro - relemos e
+   * respondemos o estado real, em vez de dar baixa duas vezes.
+   */
+  if (!atualizado) {
+    const atual = await pedidoRepository.buscarPagamentoDoAgricultor(
+      pedidoId,
+      agricultor.id,
+    );
+
+    return { pagamento: atual, ja_estava_pago: true };
+  }
+
+  logger.info(
+    { pedidoId, pagamentoId: atualizado.id, agricultorId: agricultor.id, valor: atualizado.valor },
+    'Recebimento de pagamento confirmado pelo agricultor',
+  );
+
+  const resumo = await pedidoRepository.resumoPagamentosDoPedido(pedidoId);
+
+  return {
+    pagamento: {
+      ...atualizado,
+      valor: Number(atualizado.valor),
+    },
+    ja_estava_pago: false,
+    /*
+     * Estado do pedido inteiro, para o produtor saber se falta alguem
+     * receber. Ele ve so o agregado (quantos pagamentos existem e
+     * quantos ja foram feitos), nunca o valor por concorrente.
+     */
+    pedido_pagamento: {
+      pagamentos: resumo.total,
+      pagos: resumo.pagos,
+      todos_pagos: resumo.pagos === resumo.total,
+    },
+  };
 }
 
 /*
@@ -624,6 +723,7 @@ export default {
   alterarStatusItem,
   cancelar,
   cancelarItemDoAgricultor,
+  confirmarPagamento,
   avancarPedidoComoAdmin,
   transicaoPermitida,
 };

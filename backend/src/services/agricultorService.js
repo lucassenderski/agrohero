@@ -52,7 +52,25 @@ function apenasCamposPublicos(perfil) {
    * nao da acesso a nada por si so, mas permite correlacionar o produtor
    * com o id de usuario - informacao que nao serve ao visitante.
    */
+
+  /*
+   * Troca o booleano cru pela URL derivada.
+   *
+   * O frontend precisa de UMA coisa para decidir o que exibir: o
+   * endereco da imagem. Mandar `tem_logo: true` obrigaria cada tela a
+   * remontar a URL por conta propria, e a primeira que esquecesse
+   * mostraria imagem quebrada. `logo_url` e `null` quando nao ha arquivo,
+   * e o frontend cai na imagem padrao.
+   */
+  delete publico.tem_logo;
+  publico.logo_url = derivarUrlLogo(perfil);
+
   return publico;
+}
+
+/* URL relativa do endpoint da logo, ou null quando o produtor usa a padrao. */
+function derivarUrlLogo(perfil) {
+  return perfil?.tem_logo ? `/agricultores/${perfil.id}/logo` : null;
 }
 
 /*
@@ -213,4 +231,30 @@ export async function listarAvaliacoes(agricultorId, filtros) {
   return { itens, paginacao, reputacao };
 }
 
-export default { listar, obterPerfilPublico, listarProdutos, listarAvaliacoes };
+/*
+ * Le a logo para o endpoint publico.
+ *
+ * Fica aqui, e nao no usuarioService, porque e uma leitura PUBLICA do
+ * perfil - o mesmo tipo de acesso que o perfil e a vitrine. O
+ * usuarioService trata do que exige identidade; misturar as duas coisas
+ * naquele arquivo seria abrir a porta para uma leitura sem token nascer
+ * ao lado de uma que exige token.
+ *
+ * Diferente das outras leituras publicas, NAO exige que o produtor esteja
+ * visivel: se o perfil esta suspenso, a pagina dele ja responde 404 e
+ * ninguem chega aqui. Mas uma imagem que o navegador ja carregou e
+ * cacheou continua valida - nao ha motivo para gastar uma consulta a mais
+ * so para recusar. O dado servido e uma imagem publica do proprio perfil,
+ * nunca dado privado.
+ */
+export async function obterLogo(agricultorId) {
+  const logo = await agricultorRepository.buscarLogo(agricultorId);
+
+  if (!logo) {
+    throw erros.naoEncontrado('Logo');
+  }
+
+  return logo;
+}
+
+export default { listar, obterPerfilPublico, listarProdutos, listarAvaliacoes, obterLogo };

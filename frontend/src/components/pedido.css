@@ -642,6 +642,25 @@
   font-size: var(--texto-xs);
 }
 
+/*
+ * Botoes de acao dentro de uma celula da tabela.
+ *
+ * Empilhados na vertical, e nao em linha: um pedido do produtor pode ter
+ * duas acoes ao mesmo tempo (avancar o item e confirmar o recebimento).
+ * Lado a lado, elas quebrariam a celula em telas estreitas e empurrariam
+ * a coluna de entrega.
+ */
+.tabela__acoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+  align-items: flex-start;
+}
+
+.tabela__acoes .botao {
+  white-space: nowrap;
+}
+
 /* --- Cabecalho de secao com acao a direita --- */
 
 .painel-secao__cabecalho {

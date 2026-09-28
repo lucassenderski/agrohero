@@ -32,7 +32,8 @@ const COLUNAS_PERFIL = `
   a.id, a.usuario_id, a.nome_fazenda, a.descricao, a.historia,
   a.cidade, a.estado, a.certificacoes,
   a.imagem_url, a.ativo,
-  a.criado_em, a.atualizado_em
+  a.criado_em, a.atualizado_em,
+  (a.logo_bytes IS NOT NULL) AS tem_logo
 `;
 
 /*
@@ -165,6 +166,59 @@ export class AgricultorRepository extends RepositorioBase {
       [id, imagemUrl, imagemPublicId],
     );
     return linhas[0] ?? null;
+  }
+
+  /*
+   * Grava a logo enviada pelo produtor.
+   *
+   * Os bytes vao para o proprio banco (ver a nota da migration 009). O
+   * `imagem_url` e limpo de proposito: a URL da logo e DERIVADA do id em
+   * tempo de leitura (`/agricultores/:id/logo`), entao guardar uma URL
+   * absoluta amarraria a linha ao dominio atual. Uma URL antiga apontando
+   * para outro dominio seria um link quebrado servido como se fosse
+   * valido - por isso some junto.
+   */
+  async salvarLogo(id, { bytes, mime }) {
+    const linhas = await this.executar(
+      `UPDATE agricultores
+          SET logo_bytes = $2, logo_mime = $3, imagem_url = NULL
+        WHERE id = $1
+      RETURNING id`,
+      [id, bytes, mime],
+    );
+    return linhas[0] ?? null;
+  }
+
+  /* Remove a logo enviada; o produtor volta a usar a imagem padrao. */
+  async limparLogo(id) {
+    const linhas = await this.executar(
+      `UPDATE agricultores
+          SET logo_bytes = NULL, logo_mime = NULL
+        WHERE id = $1
+      RETURNING id`,
+      [id],
+    );
+    return linhas[0] ?? null;
+  }
+
+  /*
+   * Le a logo para servir no endpoint publico.
+   *
+   * Retorna `null` quando o produtor nunca enviou arquivo - o chamador
+   * responde 404 e o frontend usa a imagem padrao. Nao lanca
+   * `naoEncontrado` aqui: um produtor sem logo e um caso NORMAL, nao um
+   * erro, e o service nao deve tratar como falha.
+   */
+  async buscarLogo(id) {
+    const linhas = await this.executar(
+      `SELECT logo_bytes, logo_mime, atualizado_em
+         FROM agricultores
+        WHERE id = $1`,
+      [id],
+    );
+    const linha = linhas[0];
+    if (!linha || !linha.logo_bytes) return null;
+    return { bytes: linha.logo_bytes, mime: linha.logo_mime, atualizadoEm: linha.atualizado_em };
   }
 
   /*

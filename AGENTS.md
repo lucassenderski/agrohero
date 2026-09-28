@@ -27,6 +27,7 @@ O PostgreSQL é publicado na **porta 5433** (não 5432) para não conflitar com 
 |---|---|---|
 | `npm run migrate` | backend | Aplica migrations pendentes (idempotente) |
 | `npm run seed` | backend | Categorias + admin (idempotente) |
+| `npm run seed:catalogo` | backend | Catalogo demonstrativo: 3 produtores e 12 produtos (idempotente, nunca em producao) |
 | `npm test` | backend | Testes de integração (recriam o schema do zero) |
 | `npm run dev` | backend | API com reload |
 | `npm run dev` / `build` | frontend | Vite |
@@ -99,15 +100,49 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 591 no backend (21 suítes) e 32 no frontend (5 suítes), todos passando.
+Suíte de testes: 630 no backend (25 suítes) e 55 no frontend (9 suítes), todos passando.
 
-**Produção.** `agrohero-api` e `agrohero-web` no Render, servidos a partir deste repositório. Em 2026-09-21 o commit no ar é `c2a97a3`, marcado pela tag `v1.0.0-producao`. Conferência de qual commit está servido e o rollback estão na seção 9 de `docs/DEPLOY.md`.
+**Produção.** `agrohero-api` e `agrohero-web` no Render, servidos a partir deste repositório. **A versão em produção é `c2a97a3`, marcada pela tag `v1.0.0-producao`** (tag anotada, já publicada em `origin`). Esse é o ponto de rollback: se o deploy da refatoração de pagamento der errado, é para `v1.0.0-producao` que se volta. Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
 ## Armadilhas já encontradas (não repetir)
 
 **O painel do Render diz o deploy disparado, não o que está no ar.** Um deploy que falha não derruba o anterior: a versão antiga continua servindo, e o painel ainda exibe o commit novo como mais recente. A conferência confiável é o artefato - o Vite nomeia os arquivos por hash de conteúdo, então reconstruir o commit candidato com o mesmo `VITE_API_URL` de produção e comparar os nomes de `dist/assets` com os que o site serve prova qual commit está publicado. Pelo mesmo motivo, rollback não é ajustar código: é **Redeploy** do commit bom no painel, ou `git revert` (não `reset --hard`, que exigiria `--force` e apagaria o commit do servidor).
 
 **`sync: false` no `render.yaml` significa "valor só no painel", e o painel pode guardar o espaço reservado.** O `CORS_ORIGINS` foi criado com o `https://exemplo.com` que a própria seção 3 do `docs/DEPLOY.md` manda usar na primeira implantação, e nunca voltou a ser corrigido. Resultado: a API rejeitava com `403 CORS_BLOQUEADO` até a origem do próprio frontend, e a vitrine publicada ficava em "Não foi possível falar com o servidor" - um erro de configuração, não de código, que nenhum teste local pega (o `.env` local tem a origem certa). Ao publicar, revisar todas as variáveis `sync: false`.
+
+**Casamento de ingrediente por `includes` casava dentro de outra palavra.** A receita compara o termo do ingrediente com o nome do produto, e o termo `mel` casava em "Frutas Ver**mel**has" - a receita de sopa oferecia uma geleia no lugar do mel. Como `casarIngredientes` devolve o **primeiro** produto que casa, um falso positivo ainda esconde o produto certo. A comparacao e por palavra inteira (regex com `\b`), em `frontend/src/dados/receitas.js`. Cuidado com termos curtos (mel, ovo, sal) em nome de produto.
+
+**Migration de DDL que troca constraint não roda sobre dados do vocabulário antigo.** A `008` troca as constraints de `pagamentos` para `metodo IN ('PIX','CARTAO','DINHEIRO')` e `status IN ('PENDENTE','PAGO','CANCELADO')`. O `ADD CONSTRAINT` valida as linhas **existentes**, então **qualquer** linha antiga (um `BOLETO`/`APROVADO` que sobreviveu de um teste de produção) faz a migration falhar e o deploy abortar:
+```
+check constraint "pagamentos_metodo_valido" of relation "pagamentos" is violated by some row
+```
+Em transação própria, então nada é aplicado pela metade - o banco fica intacto e a versão antiga continua no ar. O comentário no topo da `008` diz "os bancos estão com ZERO linhas", mas isso foi verificado só em **dev e teste**; a produção (Neon) não é alcançável daqui. Antes de publicar uma migration de constraint, normalizar os dados na origem. Ver `docs/DEPLOY.md` seção 9.
+
+**Código antigo e migration reversa não andam juntos.** Fazer Redeploy de `c2a97a3` depois de aplicar a `008` volta o código, mas não o schema: o código antigo grava `identificador_externo`/`resumo_gateway`, que a `008` apagou. O rollback de verdade exige o backup do banco (restore point/branch do Neon). Rollback de aplicação e de schema são decisões separadas.
+
+**A `009` (logo) não tem pré-condição de dados e é idempotente.** Ela só faz `ADD COLUMN IF NOT EXISTS` em `agricultores` e recria duas constraints (`DROP CONSTRAINT IF EXISTS` + `ADD`). Nenhuma constraint nova é validada contra dados existentes de forma perigosa: as colunas nascem NULL em todas as linhas, e a `CHECK` aceita `NULL/NULL`. O risco que a `008` tinha - constraint nova avaliando linhas antigas de vocabulário obsoleto - **não existe aqui**. Rodar no Neon não exige preparar dados antes. A `010` (avatar) segue exatamente o mesmo padrão em `usuarios`.
+
+**Rota de imagem autenticada não pode ser o `src` de um `<img>`.** A rota do avatar (e a da logo privada) exige o cabeçalho `Authorization`, e o navegador **não** envia cabeçalhos customizados ao buscar o `src` de uma imagem - ele faz a requisição simples. Apontar `<img src="/api/v1/usuarios/avatar">` produz 401 e ícone de imagem quebrada. O caminho correto (implementado em `frontend/src/services/avatar.js` + `hooks/useAvatar.js`) é buscar os bytes com `fetch` + token e montar um `URL.createObjectURL`. Token na query string e rota pública por id foram descartados (vazam credencial / expõem a foto alheia). **A foto é buscada uma vez no `AuthContext`** e compartilhada por cabeçalho e perfil; se cada tela buscasse por conta própria, trocar a foto não refletiria na outra sem reload.
+
+**O jsdom não implementa `URL.createObjectURL`** (confirmado: é `undefined`), e o `fetch` do ambiente não reconhece o `FormData` do jsdom como multipart - envia a string `"[object FormData]"`. Os testes de avatar em `frontend/src/testes/avatar.teste.jsx` trocam `fetch`/`FormData` pelo undici e `File` pelo `node:buffer`, e adicionam um polyfill de `createObjectURL`. A troca é **restrita a esse arquivo** porque os testes rodam em paralelo: mexer no `fetch` global faria os outros usarem o pool do undici e falharem de forma intermitente.
+
+**A mesma foto aparece em dois `<img>` na tela, e `findBy*` falha com "Found multiple elements".** A prévia do upload e o avatar do cabeçalho compartilham o mesmo object URL, então asserções por `alt` precisam de `getAllByAltText` e checar a contagem. A dupla presença é o que prova que o contexto compartilha a busca.
+
+**A suite do backend apaga o schema do banco de teste, e a suite do frontend depende dele.** `npm test` no backend recria o schema do zero e reaplica as migrations, o que **esvazia `categorias`**. Os testes do frontend nao mockam a API: eles criam produtos de verdade, e `criarProduto` usa `categorias[0].id`. Rodar o backend e depois o frontend sem re-semear dá 19 falhas em cascata, todas com `Cannot read properties of undefined (reading 'id')` em `ajudantes.js` - parece regressao de interface, mas e o banco sem categorias. A ordem que funciona:
+```bash
+cd backend && npm test                                  # recria o schema
+cd backend && node src/database/run-seeds.js            # devolve categorias
+cd frontend && npx vitest run                           # 55 testes
+```
+O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
+
+**A "falha intermitente" da suite do frontend eram tres corridas de teste, nao uma.** Elas somem quando o arquivo roda sozinho, o que engana: `npx vitest run` roda os arquivos em paralelo contra um unico backend, e a carga muda o tempo relativo das respostas. Cada uma tinha causa propria e concreta, corrigida no arquivo de teste (nao no `configuracao.js`):
+
+- **`painelAgricultor.teste.jsx` montava a pagina SEM o guard.** O `renderizarComoTipo` renderizava `<PainelAgricultor />` direto, e nao sob `<RotaPorTipo>`. A pagina assume `usuario` carregado; sem o guard, o fetch do painel podia terminar antes do `AuthContext.buscarPerfil` e a pagina ler `usuario.nome` de um `null` - `TypeError` que desmonta a arvore. Em producao a pagina vive sob o guard, entao nunca foi bug de producao: era o teste violando a convencao documentada em `perfil.teste.jsx`. Corrigido montando a rota com o mesmo `<RotaPorTipo>` do `App`. E a licao geral: **teste de pagina protegida usa o guard do `App`, nao a pagina solta.**
+- **`home.teste.jsx` usava `findBy*` onde devia usar `getBy*`.** Os placeholders entram no PRIMEIRO render (sincrono); com `findBy`, a espera dava tempo de a API responder e substituir os placeholders pelas categorias reais, e o teste nao achava mais o texto. `getByRole` le exatamente o render atual.
+- **`painelConsumidor.teste.jsx` usava `getBy*` onde devia usar `findBy*`.** Logo apos promover o endereco, o componente faz `await carregar()` e a lista some enquanto a API responde; um `getByText` sincrono rodava nesse intervalo. `findByText` espera a lista voltar. **Regra: `getBy*` so quando o elemento ja esta no DOM; qualquer coisa que dependa de uma resposta da API usa `findBy*`/`waitFor`.**
+
+Confirmado apos as correcoes: 10 rodadas seguidas de 55/55. O `asyncUtilTimeout` do `configuracao.js` continua em 6s, mas como teto para telas legitimamente lentas - nao era a causa destas falhas, e elevar o tempo escondia o bug real por mais tempo em vez de corrigi-lo.
 
 **Zod descarta campo não declarado, em silêncio.** Um campo ausente do schema é removido sem erro. Foi a causa de um bug: `perfilAgricultorSchema` não declarava `cidade`/`estado`, então o perfil do produtor era gravado sem localização. Ao adicionar campo a um objeto aninhado, conferir se o schema o declara.
 
@@ -191,13 +226,17 @@ Suíte de testes: 591 no backend (21 suítes) e 32 no frontend (5 suítes), todo
 
 **Transacao testada so por "nada foi gravado" nao esta testada.** Desligar BEGIN/ROLLBACK nao fez os testes de atomicidade falharem, porque a revalidacao barrava tudo antes da primeira escrita. Foi preciso um teste que baixa o estoque de verdade e lanca erro depois, exercitando `emTransacao` diretamente. Vale desconfiar de cobertura de rollback que passa sem nunca ter escrito nada.
 
-**Falha de gateway de pagamento nao desfaz o pedido.** O pedido, os itens e a baixa de estoque acontecem na transacao; a chamada ao gateway acontece DEPOIS do commit. Segurar uma transacao aberta esperando rede de terceiro prenderia locks de estoque e conexao do pool. Se o gateway falhar, o pedido fica com pagamento PENDENTE e o cliente tenta de novo.
+**O pagamento acontece no local; o checkout nao cobra nada.** Nao existe gateway, webhook nem estorno. O `POST /checkout` cria o pedido e registra quanto CADA produtor tem a receber na retirada, com status PENDENTE. Quem confirma o recebimento e o produtor, pelo painel dele (`PATCH /pedidos/:id/pagamento/confirmar`). Isso significa que "pagamento aprovado" nao e um estado possivel na criacao - so PENDENTE, PAGO ou CANCELADO.
 
-**Identificador do gateway precisa ser GRAVADO, nao so devolvido.** Bug real encontrado na validacao manual: o checkout devolvia o id da transacao na resposta, mas o UPDATE so persistia status e resumo. Sem ele, `buscarPagamentoPorIdentificador` nao acharia nada e um webhook de PIX nao teria como reconciliar - o pedido ficaria pendente para sempre. Vale conferir, campo a campo, se todo dado devolvido na resposta tambem foi persistido.
+**O pagamento e por PRODUTOR, nao por pedido.** Um pedido pode ter itens de varios produtores, e cada um recebe o seu na retirada. Com uma linha por pedido, "quem confirma o recebimento?" nao teria resposta, e um produtor confirmaria o pagamento do produto de outro. A posse e o eixo da seguranca: o agricultor vem do TOKEN, e a consulta e por `(pedidoId, agricultorId)`. Mandar o id de um pedido alheio devolve 404, porque a linha consultada nao existe para ele.
 
-**Gateway simulado deve ser deterministico, nao aleatorio.** O `gatewayFake` decide por regra (valor terminando em ,13 recusado, ,99 pendente, resto aprovado). Um resultado aleatorio tornaria os testes instaveis - o mesmo teste passaria e falharia sem mudanca de codigo.
+**Quem tenta confirmar recebe codigos diferentes conforme o motivo.** Sao duas barreiras em sequencia, e vale saber qual esta respondendo: um CLIENTE (ou admin) esbarra primeiro no `requireRole('agricultor')` da rota e recebe **403 SEM_PERMISSAO**; um OUTRO AGRICULTOR passa pelo role e para na consulta por posse, recebendo **404 NAO_ENCONTRADO**. Um 404 aqui e o comportamento desejado - um 403 confirmaria que aquele pedido existe e que tem pagamento para alguem.
 
-**Em producao, o gateway simulado e recusado explicitamente.** `paymentService` lanca erro se `PAYMENT_GATEWAY=fake` com NODE_ENV=production. Um erro de configuracao silencioso geraria pedidos entregues sem dinheiro nenhum ter entrado.
+**A ordem das checagens em `confirmarPagamento` importa.** Primeiro "tem pagamento meu neste pedido?" (404 se nao), e so depois as regras de estado. Invertendo, um produtor de fora receberia "pagamento ja confirmado" a respeito de um pedido que nao e dele - informacao que nao precisa sair daqui.
+
+**Confirmar duas vezes nao e erro.** O `UPDATE ... WHERE status = 'PENDENTE'` e condicional. Se ele nao encontra a linha, outra requisicao confirmou no meio: relemos o pagamento e respondemos o estado real com `ja_estava_pago: true`, em vez de dar baixa duas vezes.
+
+**Pedido cancelado nao aceita confirmacao de pagamento.** Recusar explicitamente (`PEDIDO_CANCELADO`) e melhor que dar baixa num pedido que nao vai ser entregue. O cancelamento, por sua vez, marca como CANCELADO apenas os pagamentos ainda PENDENTE - um pagamento ja PAGO nao vira CANCELADO por um UPDATE em massa.
 
 **Status do pedido é derivado dos itens, por trigger no banco.** `pedidos.status` não é escrito pela aplicação. A função `sincronizar_status_pedido()` (migration 004) recalcula a cada mudança de item, com precedência: todos cancelados → CANCELADO; todos entregues → ENTREGUE; todos enviados/entregues → ENVIADO; algum em andamento → PROCESSANDO; senão PENDENTE. Escrever o status na aplicação criaria dois lugares decidindo o mesmo estado, e um deles esqueceria.
 
@@ -217,21 +256,9 @@ Suíte de testes: 591 no backend (21 suítes) e 32 no frontend (5 suítes), todo
 
 **Frete precisa ser calculado antes do total, nunca depois.** O banco exige `valor_total = valor_produtos + valor_frete`, e o frete gratis depende do valor dos PRODUTOS. Calcular o frete a partir do total seria circular.
 
-**Validar assinatura não é o mesmo que confiar no conteúdo.** O webhook tem assinatura HMAC válida e mesmo assim o status do corpo é IGNORADO: o servidor chama `paymentService.consultar()` e aplica a resposta do gateway. Sem isso, um webhook antigo reenviado (assinatura válida, evento superado) reverteria um estorno. A assinatura prova a ORIGEM; a reconciliação prova o ESTADO.
+**A notificacao por e-mail sai FORA da transacao e nunca derruba o pedido.** `notificarPedidoCriado` roda depois do commit e engole a propria falha (log + segue). Uma falha de SMTP nao pode desfazer um pedido ja gravado, com estoque ja baixado: o pedido existe no banco e o cliente o ve no historico, que e a fonte de verdade. E-mail e informacao acessoria.
 
-**Gateway fake que ecoa o status local torna a reconciliação inútil.** A primeira versão de `gatewayFake.consultar()` devolvia o `statusAtual` que o banco informava — um espelho que nunca discorda. Um fake que sempre concorda esconde exatamente o bug que a reconciliação existe para pegar. A correção foi um ledger em memória, com `_simularPagamentoConfirmado`/`_registrarStatus` representando um evento externo (o pagador concluiu o PIX no banco dele). O teste que provava o contrário falha ao trocar a consulta pelo corpo.
-
-**A assinatura cobre os BYTES, não o JSON equivalente.** `JSON.stringify(obj, null, 2)` e `JSON.stringify(obj)` são o mesmo objeto e strings diferentes: a assinatura de uma não vale para a outra. Por isso `express.json({ verify })` guarda `req.rawBody` — re-serializar o objeto parseado muda espaços, ordem de chaves e formato de número, e corromperia a verificação.
-
-**Comparar assinaturas com `===` vaza o segredo pelo tempo de resposta.** O comparador para no primeiro byte diferente, então medir o tempo revela a assinatura byte a byte. Usar `crypto.timingSafeEqual`, com guarda de tamanho antes (a função lança se os buffers tiverem tamanhos diferentes, e isso viraria 500).
-
-**Webhook sem segredo configurado deve ser RECUSADO, não aceito.** `verificarAssinatura` lança 500 quando `PAYMENT_WEBHOOK_SECRET` está vazio. Aceitar sem verificar transformaria um erro de configuração numa porta aberta para marcar pedidos como pagos. Falhar fechado.
-
-**Webhook responde 200 mesmo quando ignora o evento.** 404 faria o gateway reenviar para sempre um evento que nunca vai casar (de outro ambiente, ou de pagamento antigo). A exceção são erros reais: 403 para assinatura inválida e 422 para falha de reconciliação, onde o reenvio É desejado.
-
-**Estorno roda FORA da transação de cancelamento.** É chamada HTTP externa que pode levar segundos; dentro da transação, seguraria uma conexão do pool e uma linha travada durante toda a espera — alguns cancelamentos simultâneos esgotariam o pool. Consequência aceita: o estorno pode falhar depois do cancelamento confirmado. Nesse caso o cancelamento NÃO é desfeito (devolver dinheiro é obrigação, não condição) e a resposta traz `estorno_pendente: true` para a operação agir.
-
-**`env.PAYMENT_GATEWAY` é mutável em runtime, e os testes dependem disso.** O teste de falha de estorno troca o gateway por um inexistente dentro de um `try/finally`. `config/env.js` exporta o objeto `env`, e não valores congelados — o `finally` restaura.
+**Os dois e-mails do checkout tem publicos diferentes.** `enviarEmailPedidoConfirmado` vai para o CLIENTE (o pedido existe e quanto vai pagar na retirada); `enviarEmailNovoPedidoProdutor` vai para CADA produtor com itens no pedido, com o valor que ele tem a receber. Confirmar o recebimento no painel, por sua vez, nao dispara e-mail - o produtor acabou de fazer a acao e ja ve o resultado na tela.
 
 ---
 
@@ -251,7 +278,15 @@ Suíte de testes: 591 no backend (21 suítes) e 32 no frontend (5 suítes), todo
 
 **Nome de dado de teste colidindo com rótulo da interface quebra o teste.** `nome_destinatario: 'Principal'` fazia `getByText('Principal')` achar tanto o nome quanto o selo "Principal" do endereço principal. Usar nomes que não aparecem como rótulo na tela.
 
+**Chave de lista nao pode ser um campo que os placeholders deixam nulo.** A home mostra tres categorias de exemplo (`{ id: null, nome }`) enquanto a API de categorias nao responde. Com `key={categoria.id}` as tres chaves viravam `null`, e o React avisava "Encountered two children with the same key" e deixava os itens indefinidos. O detalhe que engana: os placeholders entram no PRIMEIRO render, antes de qualquer resposta - entao o aviso aparece mesmo com o banco cheio de categorias, e nao e um caso de "banco vazio". Corrigido com `key={categoria.id ?? categoria.nome}` e coberto por `home.teste.jsx`, que espiona `console.error` (contar links nao provaria nada: com chave repetida o React ainda renderiza os itens).
+
 **`window.confirm` precisa de `vi.spyOn` no jsdom.** O diálogo não existe e a remoção fica sem autorização. Lembrar de `mockRestore()` no fim.
+
+**O `fetch` do jsdom nao envia o `FormData` do jsdom como multipart.** Ele cai no caminho generico e manda a STRING `"[object FormData]"` com `Content-Type: text/plain`; o servidor responde "nenhum arquivo foi enviado". Um teste de upload passa a acusar a aplicacao por um defeito do ambiente. A correcao e trocar `fetch`/`FormData` pelas pecas do Node (`undici`) e `File` pelo `node:buffer`, que falam o mesmo protocolo entre si.
+
+**Essa troca de `fetch` tem que ficar no arquivo que faz upload, nao no setup compartilhado.** Aplicada em `configuracao.js`, ela contamina a suite inteira: o undici mantem um pool de conexoes proprio, e os testes - que rodam em paralelo contra o mesmo backend - passam a competir por um recurso que o ambiente nao compartilha com o resto. O sintoma e falha intermitente em testes SEM relacao com upload, que somem quando o arquivo roda sozinho. O vitest isola os globals por arquivo, entao o escopo local resolve.
+
+**`fetch` global do Node nao consome o `FormData` do pacote `undici`.** Sao implementacoes distintas: o `FormData` do `undici` so funciona com o `fetch` do proprio `undici`. Trocar so um dos dois (o caso "minimo" que parece suficiente) falha do mesmo jeito que o jsdom.
 
 ---
 

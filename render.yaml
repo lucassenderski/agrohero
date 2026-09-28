@@ -57,8 +57,6 @@ services:
       #   node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
       - key: JWT_SECRET
         sync: false
-      - key: PAYMENT_WEBHOOK_SECRET
-        sync: false
 
       # Precisa ser a URL do frontend publicado, com https e SEM barra
       # no final. O backend recusa subir com "*" ou com "http://" em
@@ -80,11 +78,6 @@ services:
       # Documentacao (Swagger) desligada em producao.
       - key: ENABLE_API_DOCS
         value: "false"
-
-      # Gateway de pagamento simulado. Trocar quando houver credenciais
-      # reais do Mercado Pago.
-      - key: PAYMENT_GATEWAY
-        value: fake
 
   # --------------------------------------------------------
   # Interface

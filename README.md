@@ -25,7 +25,7 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 10 | Carrinho | ✅ |
 | 11 | Checkout | ✅ |
 | 12 | Pedidos | ✅ |
-| 13 | Pagamentos (webhook e estorno) | ✅ |
+| 13 | Pagamentos na retirada (PIX, cartão, dinheiro) | ✅ |
 | 14 | Avaliações | ✅ |
 | 15 | Frontend (estrutura, rotas, cliente HTTP, contextos) | ✅ |
 | 16 | Integração frontend + backend | ✅ |
@@ -125,6 +125,21 @@ Anote a senha. Ela é gerada aleatoriamente a cada ambiente e não é exibida de
 
 Ambos os comandos são seguros para rodar mais de uma vez: as migrations sabem o que já foi aplicado e os seeds não duplicam dados.
 
+### 5.1. Catálogo demonstrativo (opcional)
+
+Um banco recém-criado tem categorias, mas nenhum produto — a vitrine fica vazia e a página de receitas não tem com o que casar os ingredientes. Para popular um catálogo de demonstração:
+
+```bash
+cd backend
+npm run seed:catalogo
+```
+
+Isso cria 3 produtores de Toledo-PR e 12 produtos (hortaliças, raízes, ovos, mel e geleia), escolhidos para que os ingredientes das 6 receitas encontrem um produto na vitrine. O comando imprime uma vez o e-mail das 3 contas de demonstração e a senha, igual ao administrador.
+
+O script é idempotente: rodar de novo não duplica produtor nem produto, e **não sobrescreve** preço ou estoque de produto que já existe.
+
+> **Não é para produção.** Os dados são fictícios. Por isso este seed **não** fica na pasta `seeds/`, que roda automaticamente no `npm run seed` — e no plano gratuito do Render o seed é encadeado no `startCommand`, então o que está em `seeds/` pode acabar gravado no banco de produção. Quem decide rodar o catálogo demonstrativo é uma pessoa, com o comando acima.
+
 ### 6.1. Banco de testes
 
 Os testes de integração usam um banco separado e descartável:
@@ -155,7 +170,7 @@ npm test                 # tudo
 npm run test:coverage    # com relatório de cobertura
 ```
 
-Cobertura atual do backend: **84% das linhas**. As lacunas estão em caminhos que não têm rota (integração real com o Mercado Pago, `requireDono` — ver a nota abaixo).
+Cobertura atual do backend: **84% das linhas**. As lacunas estão em caminhos que não têm rota (`requireDono` — ver a nota abaixo).
 
 `requireDono` existe e está testado como unidade, mas nenhuma rota o usa: a checagem de propriedade acontece dentro dos services, que já têm o recurso carregado e podem comparar o dono sem uma segunda consulta ao banco.
 
@@ -194,57 +209,34 @@ VITE_API_URL=http://localhost:3001/api/v1 npm test
 
 ### 7. Variáveis sensíveis
 
-O `.env` fica fora do Git (está no `.gitignore`). O `.env.example` mostra só os nomes, com valores de exemplo. Duas chaves merecem atenção:
+O `.env` fica fora do Git (está no `.gitignore`). O `.env.example` mostra só os nomes, com valores de exemplo. Uma chave merece atenção:
 
 | Variável | Para que serve | Se faltar |
 |---|---|---|
 | `JWT_SECRET` | Assina os tokens de acesso | A aplicação não sobe (validação exige 32+ caracteres) |
-| `PAYMENT_WEBHOOK_SECRET` | Verifica a assinatura dos webhooks | Webhook recusado com 500 (falha fechada, nunca aberta) |
 
-Gere cada uma com um valor aleatório próprio:
+Gere com um valor aleatório próprio:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Usar o mesmo valor nas duas é um erro: rotacionar o segredo do webhook não deve invalidar as sessões dos usuários.
+Não há mais segredo de gateway de pagamento: o pagamento é feito presencialmente, na retirada ou entrega, direto ao produtor, e confirmado por ele no painel. Nenhuma variável de integração de pagamento é necessária.
 
-### 8. Testar o webhook de pagamento
+### 8. Pagamento na retirada
 
-O gateway `fake` só grava a transação, sem chamar serviço externo. Para simular o pagador concluindo o PIX e ver a confirmação chegar por webhook:
+Não há gateway, webhook nem estorno. O checkout apenas registra **como** o consumidor pretende pagar — `PIX`, `CARTAO` ou `DINHEIRO` — e o pagamento em si acontece no balcão, entre consumidor e produtor.
 
-```bash
-cd backend
-node --input-type=module -e "
-import gatewayFake from './src/services/gateways/gatewayFake.js';
-import pedidoRepository from './src/repositories/pedidoRepository.js';
+O fluxo é:
 
-const pagamento = await pedidoRepository.buscarPagamentoPorPedido(1);
-gatewayFake._simularPagamentoConfirmado(pagamento.identificador_externo);
-console.log('Gateway agora diz APROVADO para', pagamento.identificador_externo);
-"
-```
+1. o consumidor escolhe o método no checkout e confirma o pedido;
+2. a API cria uma linha em `pagamentos` por produtor, com status `PENDENTE`;
+3. o produtor confirma o recebimento no painel (`PATCH /api/v1/pedidos/:id/pagamento/confirmar`), o que muda o status para `PAGO`;
+4. quando todos os produtores do pedido confirmam, o pedido fica com o pagamento completo.
 
-E envie o webhook assinado:
+O consumidor não pode confirmar o pagamento: a rota exige o papel `agricultor` e responde **403** para qualquer outro. Um produtor que não participa do pedido recebe **404**, e não 403 — não se confirma a existência de pedido alheio.
 
-```bash
-SECRET=$(grep '^PAYMENT_WEBHOOK_SECRET=' backend/.env | cut -d= -f2-)
-BODY='{"pedido_id":1}'
-HASH=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | awk '{print $2}')
-
-curl -X POST http://localhost:3001/api/v1/webhooks/pagamento \
-  -H 'Content-Type: application/json' \
-  -H "x-agrohero-signature: sha256=$HASH" \
-  -d "$BODY"
-```
-
-Confira o resultado:
-
-```json
-{"sucesso":true,"dados":{"processado":true,"status":"APROVADO","pagamento":{...}}}
-```
-
-Se `x-agrohero-signature` estiver errado ou ausente, a resposta é **403** e nada muda. O corpo do webhook não define o status: o servidor consulta o gateway e aplica a resposta dele.
+Para testar sem interface, use um produtor de demonstração (ver `npm run seed:catalogo`) e chame a rota de confirmação com o token dele.
 
 ### 9. Testar as avaliações
 
@@ -340,7 +332,7 @@ agricultores 1 ─── N    produtos
 categorias  1 ──── N    produtos
 carrinhos   1 ──── N    carrinho_itens    → 1 produtos
 pedidos     1 ──── N    pedido_itens      → 1 produtos, → 1 agricultores
-pedidos     1 ──── N    pagamentos
+pedidos     1 ──── N    pagamentos       → 1 agricultores (um por produtor do pedido)
 pedidos     1 ──── N    avaliacoes        → 1 produtos
 ```
 
@@ -389,6 +381,9 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | GET | `/api/v1/usuarios/profile` | 🔐 | Perfil do usuário logado |
 | PUT | `/api/v1/usuarios/profile` | 🔐 | Editar o próprio perfil |
 | PUT | `/api/v1/usuarios/senha` | 🔐 | Trocar a própria senha |
+| PUT | `/api/v1/usuarios/avatar` | 🔐 | Enviar/trocar a própria foto de perfil (multipart) |
+| GET | `/api/v1/usuarios/avatar` | 🔐 | Bytes da própria foto (o dono é o do token; não aceita id) |
+| DELETE | `/api/v1/usuarios/avatar` | 🔐 | Remover a própria foto (volta às iniciais) |
 | GET | `/api/v1/agricultores` | 🔓 | Lista pública de produtores |
 | GET | `/api/v1/agricultores/:id` | 🔓 | Perfil público do produtor |
 | GET | `/api/v1/agricultores/:id/produtos` | 🔓 | Vitrine paginada do produtor |
@@ -426,7 +421,7 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | DELETE | `/api/v1/pedidos/:id/itens/:itemId` | 🧑‍🌾 | Cancelar o próprio item |
 | GET | `/api/v1/admin/pedidos` | ⚙️ | Todos os pedidos |
 | PATCH | `/api/v1/admin/pedidos/:id/status` | ⚙️ | Avançar pedido inteiro |
-| POST | `/api/v1/webhooks/pagamento` | 🔓 | Notificação do gateway (assinatura HMAC) |
+| PATCH | `/api/v1/pedidos/:id/pagamento/confirmar` | 🧑‍🌾 | Confirmar recebimento do pagamento (na retirada) |
 | GET | `/api/v1/avaliacoes/produto/:produtoId` | 🔓 | Avaliações do produto (média e total) |
 | GET | `/api/v1/avaliacoes/agricultor/:agricultorId` | 🔓 | Avaliações do produtor (com distribuição de notas) |
 | POST | `/api/v1/avaliacoes` | 👤 | Avaliar produto recebido |
@@ -479,8 +474,8 @@ Todos os schemas referenciados por `$ref` também são verificados, e toda opera
 - Rate limit global e restrito em `/auth`
 - Helmet, limite de 1 MB no corpo, tratamento de erro sem stack trace
 - Log com redação de senha, token e dados de cartão
-- Nenhum dado de cartão é armazenado (responsabilidade do gateway)
-- Guarda de produção: a API **recusa subir** se `JWT_SECRET` ou `PAYMENT_WEBHOOK_SECRET` forem valores de exemplo, se `CORS_ORIGINS` tiver `*` ou usar `http://`
+- Nenhum dado de cartão é armazenado nem trafega pelo sistema: a cobrança é presencial, na maquininha do produtor
+- Guarda de produção: a API **recusa subir** se `JWT_SECRET` for um valor de exemplo, se `CORS_ORIGINS` tiver `*` ou usar `http://`
 
 ### Testes de segurança
 
@@ -513,6 +508,7 @@ testes negativos — o que importa é o que o sistema **recusa**:
 | `docker compose down -v` | raiz | Para e **apaga** os dados |
 | `npm run migrate` | backend | Aplica as migrations pendentes |
 | `npm run seed` | backend | Cria categorias e o administrador |
+| `npm run seed:catalogo` | backend | Catálogo demonstrativo (não usar em produção) |
 | `npm run dev` | backend | API com reload automático |
 | `npm test` | backend | Testes de integração |
 | `npm run dev` | frontend | Interface em desenvolvimento |
@@ -533,7 +529,7 @@ O passo a passo completo está em **[docs/DEPLOY.md](docs/DEPLOY.md)**. O reposi
 | PostgreSQL | Neon | sim, permanente | 0,5 GB e 100 h de processamento/mês |
 | Imagens | Cloudinary (futuro) | sim | 3 GB de storage, 10 GB de tráfego |
 
-> **Sobre a linha de imagens:** o upload de arquivo ainda **não está implementado**. O produto guarda apenas `imagem_url`, informada no cadastro. As variáveis `STORAGE_DRIVER` e `CLOUDINARY_*` já existem no `.env.example` e são validadas pelo `env.js`, mas nenhum código as consome ainda — a linha acima é o destino planejado, não algo que o deploy atual use.
+> **Sobre a linha de imagens:** o upload de arquivo existe para a **logo da propriedade** e a **foto de perfil (avatar)**, processadas pelo `sharp` (redimensionadas e convertidas para WebP) e guardadas no próprio PostgreSQL como `BYTEA`. O produto, porém, ainda guarda apenas `imagem_url`, informada no cadastro. As variáveis `STORAGE_DRIVER` e `CLOUDINARY_*` já existem no `.env.example` e são validadas pelo `env.js`, mas nenhum código as consome ainda — a linha acima é o destino planejado para as imagens de produto, não algo que o deploy atual use.
 
 ### O que foi descartado, e por quê
 
@@ -553,7 +549,7 @@ O plano gratuito do Render não executa `preDeployCommand` nem oferece Shell/SSH
 
 O backend **recusa subir** em produção com configuração insegura (regra em `src/config/verificacaoProducao.js`):
 
-- `JWT_SECRET` e `PAYMENT_WEBHOOK_SECRET` não podem conter valores de exemplo;
+- `JWT_SECRET` não pode conter valores de exemplo;
 - `CORS_ORIGINS` não pode conter `*`;
 - `CORS_ORIGINS` não pode usar `http://`.
 

@@ -16,7 +16,18 @@ import { idParametro } from '../utils/validacao.js';
  * `produtos.preco` - a manipulacao nao tem por onde entrar.
  */
 
-export const METODOS_PAGAMENTO = ['PIX', 'CARTAO', 'BOLETO'];
+/*
+ * Metodos aceitos no checkout.
+ *
+ * Todos sao pagos NO LOCAL da retirada/entrega - nao ha cobranca online.
+ * A escolha aqui e um compromisso: o cliente informa como pretende pagar
+ * para o produtor se preparar (ter troco, levar a maquininha), e o
+ * registro de pagamento nasce PENDENTE. Quem confirma o recebimento e o
+ * produtor.
+ *
+ * BOLETO saiu: nao se compensa um boleto na retirada.
+ */
+export const METODOS_PAGAMENTO = ['PIX', 'CARTAO', 'DINHEIRO'];
 
 export const metodoPagamento = z.enum(METODOS_PAGAMENTO, {
   errorMap: () => ({

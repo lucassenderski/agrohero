@@ -198,10 +198,13 @@ describe('Fluxo de compra', () => {
     renderizar('/checkout');
 
     // O checkout precisa carregar enderecos e a previa de frete.
-    await screen.findByText(/Forma de pagamento/i);
+    await screen.findByText(/Pagamento na retirada/i);
 
     // O endereco criado e a unica opcao; ele ja vem selecionado.
     expect(screen.getByDisplayValue('PIX')).toBeChecked();
+
+    // O estereotipo antigo era "pago no site"; agora e "a pagar na retirada".
+    expect(await screen.findByText(/sera feito na retirada ou entrega/i)).toBeInTheDocument();
 
     const confirmar = screen.getByRole('button', { name: /confirmar pedido/i });
     await waitFor(() => expect(confirmar).toBeEnabled());
@@ -225,6 +228,26 @@ describe('Fluxo de compra', () => {
     expect(Number(pedido.valor_total)).toBe(
       Number(pedido.valor_produtos) + Number(pedido.valor_frete),
     );
+
+    /*
+     * O pedido nasce PENDENTE DE PAGAMENTO, nunca "APROVADO": nao houve
+     * cobranca online. Se o backend voltasse a marcar como pago, o
+     * produtor perderia o alerta de quem ainda deve receber.
+     *
+     * A lista nao traz os pagamentos (seria N+1 por linha); o detalhe
+     * traz. Consultamos o detalhe, que e a visao que o cliente ve ao
+     * abrir o pedido.
+     */
+    const { dados: detalhe } = await chamar(`/pedidos/${pedido.id}`, {
+      metodo: 'GET',
+      token: cliente.token,
+    });
+
+    expect(detalhe.pagamentos).toHaveLength(1);
+    expect(detalhe.pagamentos[0].status).toBe('PENDENTE');
+    expect(detalhe.pagamentos[0].metodo).toBe('PIX');
+    expect(detalhe.pagamento_resumo.pendentes).toBe(1);
+    expect(detalhe.pagamento_resumo.pagos).toBe(0);
 
     // O estoque caiu exatamente o que foi comprado.
     const { dados: atualizado } = await chamar(`/produtos/${produto.id}`, { metodo: 'GET' });
@@ -256,7 +279,7 @@ describe('Fluxo de compra', () => {
 
     renderizar('/checkout');
 
-    await screen.findByText(/Forma de pagamento/i);
+    await screen.findByText(/Pagamento na retirada/i);
 
     // Sem endereco, o botao fica desabilitado e a tela orienta.
     expect(screen.getByText(/ainda nao tem endereco cadastrado/i)).toBeInTheDocument();

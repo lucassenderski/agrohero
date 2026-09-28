@@ -6,6 +6,7 @@ import {
 } from '../services/catalogo.js';
 import { useRequisicao } from '../hooks/useRequisicao.js';
 import ProductGrid from '../components/ProductGrid.jsx';
+import LogoPropriedade from '../components/LogoPropriedade.jsx';
 import { Carregando, MensagemErro, Estrelas } from '../components/ui.jsx';
 import { formatarData } from '../utils/formato.js';
 
@@ -44,17 +45,11 @@ export default function AgricultorDetalhe() {
       </nav>
 
       <header className="produtor-perfil">
-        {dados.imagem_url ? (
-          <img
-            className="produtor-perfil__imagem"
-            src={dados.imagem_url}
-            alt={dados.nome_fazenda}
-          />
-        ) : (
-          <div className="produtor-perfil__sem-imagem" aria-hidden="true">
-            🚜
-          </div>
-        )}
+        <LogoPropriedade
+          logoUrl={dados.logo_url}
+          nome={dados.nome_fazenda}
+          className="produtor-perfil__imagem"
+        />
 
         <div className="produtor-perfil__dados">
           <h1>{dados.nome_fazenda}</h1>

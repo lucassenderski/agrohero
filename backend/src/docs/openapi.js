@@ -95,6 +95,13 @@ const schemas = {
       endereco: { type: 'string', nullable: true },
       certificacoes: { type: 'array', items: { type: 'string' }, example: ['Organico IBD'] },
       imagem_url: { type: 'string', nullable: true },
+      logo_url: {
+        type: 'string',
+        nullable: true,
+        description:
+          'URL da logo da propriedade para uso em `<img src>`. Null quando o produtor ainda nao enviou logo.',
+        example: '/agricultores/1/logo',
+      },
       ativo: { type: 'boolean', example: true },
     },
   },
@@ -120,6 +127,13 @@ const schemas = {
       estado: { type: 'string', nullable: true, example: 'SP' },
       certificacoes: { type: 'array', items: { type: 'string' }, example: ['Organico IBD'] },
       imagem_url: { type: 'string', nullable: true },
+      logo_url: {
+        type: 'string',
+        nullable: true,
+        description:
+          'URL da logo da propriedade, para uso direto em `<img src>`. Null quando o produtor nao enviou logo - o frontend usa a imagem padrao. Os bytes ficam no banco e sao servidos por GET /agricultores/{id}/logo.',
+        example: '/agricultores/1/logo',
+      },
       ativo: { type: 'boolean', example: true },
       criado_em: { type: 'string', format: 'date-time' },
       atualizado_em: { type: 'string', format: 'date-time' },
@@ -568,7 +582,7 @@ const schemas = {
       'NAO existe campo de valor, frete ou total. O Zod descarta qualquer um que for enviado, e o checkout recalcula tudo a partir de produtos.preco. E o que torna a manipulacao de preco impossivel, e nao apenas validada.',
     properties: {
       endereco_id: { type: 'integer', example: 1 },
-      metodo_pagamento: { type: 'string', enum: ['PIX', 'CARTAO', 'BOLETO'], example: 'PIX' },
+      metodo_pagamento: { type: 'string', enum: ['PIX', 'CARTAO', 'DINHEIRO'], example: 'PIX' },
     },
   },
 
@@ -609,25 +623,28 @@ const schemas = {
   CheckoutResultado: {
     type: 'object',
     description:
-      'O pedido existe independente do resultado do pagamento. Um pagamento recusado NAO desfaz o pedido: o cliente pode tentar pagar de novo.',
+      'O checkout NAO cobra nada: ele cria o pedido e registra quanto cada produtor tem a receber na retirada. Nao ha gateway para aprovar, recusar ou deixar em analise - por isso os pagamentos nascem sempre PENDENTE.',
     properties: {
       pedido: { $ref: '#/components/schemas/Pedido' },
-      pagamento: {
+      pagamentos: {
+        type: 'array',
+        description: 'Um pagamento por produtor que vendeu neste pedido.',
+        items: { $ref: '#/components/schemas/Pagamento' },
+      },
+      pagamento_resumo: {
         type: 'object',
         properties: {
-          id: { type: 'integer' },
-          metodo: { type: 'string', example: 'PIX' },
+          total: { type: 'number', example: 41.95 },
+          a_pagar: { type: 'number', example: 41.95 },
           status: {
             type: 'string',
-            enum: ['PENDENTE', 'APROVADO', 'RECUSADO', 'CANCELADO', 'REEMBOLSADO'],
-            example: 'APROVADO',
+            enum: ['PENDENTE', 'PAGO'],
+            example: 'PENDENTE',
           },
-          valor: { type: 'number', example: 27.45 },
-          mensagem: { type: 'string' },
-          dados_pagamento: {
-            type: 'object',
-            nullable: true,
-            description: 'Dados para o cliente concluir o PIX (QR Code). Nao inclui dado sensivel.',
+          produtores: { type: 'integer', example: 2 },
+          instrucao: {
+            type: 'string',
+            example: 'O pagamento e feito na retirada ou entrega, direto ao produtor.',
           },
         },
       },
@@ -752,52 +769,34 @@ const schemas = {
     },
   },
 
-  WebhookPagamentoEntrada: {
+  Pagamento: {
     type: 'object',
     description:
-      'Corpo da notificacao do gateway. O `status` enviado aqui e IGNORADO: o servidor reconcilia com o gateway e usa a resposta dele. O campo existe apenas para compatibilidade com gateways que o enviam.',
+      'Um pagamento por PRODUTOR dentro do pedido. Um pedido multi-produtor tem varios: cada produtor recebe a sua parte na retirada e confirma o proprio recebimento.',
     properties: {
-      pedido_id: {
-        type: 'integer',
-        example: 1,
-        description: 'Referencia ao nosso pedido (external_reference no gateway).',
-      },
-      identificador: {
+      id: { type: 'integer', example: 1 },
+      pedido_id: { type: 'integer', example: 1 },
+      agricultor_id: { type: 'integer', example: 1 },
+      metodo: {
         type: 'string',
-        example: 'FAKE-1757890000000-A1B2C3D4',
-        description: 'Id da transacao no gateway.',
+        enum: ['PIX', 'CARTAO', 'DINHEIRO'],
+        example: 'PIX',
+        description: 'Forma que o cliente declarou que usara no local. Nao e uma transacao.',
       },
       status: {
         type: 'string',
-        example: 'APROVADO',
-        description: 'Informativo. Nao define o status aplicado.',
-      },
-    },
-  },
-
-  WebhookPagamentoResultado: {
-    type: 'object',
-    properties: {
-      processado: {
-        type: 'boolean',
-        example: true,
-        description: 'false quando o evento nao mudou nada (duplicado, desconhecido ou recusado).',
-      },
-      motivo: {
-        type: 'string',
-        enum: [
-          'PAGAMENTO_NAO_ENCONTRADO',
-          'STATUS_JA_APLICADO',
-          'TRANSICAO_RECUSADA',
-        ],
+        enum: ['PENDENTE', 'PAGO', 'CANCELADO'],
+        example: 'PENDENTE',
         description:
-          'Presente quando `processado` e false. PAGAMENTO_NAO_ENCONTRADO tambem responde 200: o gateway nao deve reenviar um evento que nunca vai casar.',
+          'PENDENTE (a receber), PAGO (produtor confirmou) ou CANCELADO (pedido desfeito antes do recebimento).',
       },
-      status: {
-        type: 'string',
-        example: 'APROVADO',
-        description: 'Status do pagamento apos o processamento (ou o que permaneceu).',
+      valor: {
+        type: 'number',
+        example: 22.4,
+        description: 'Parte deste produtor mais a fatia proporcional de frete.',
       },
+      nome_fazenda: { type: 'string', nullable: true, description: 'Presente na listagem.' },
+      criado_em: { type: 'string', format: 'date-time' },
     },
   },
 
@@ -892,20 +891,20 @@ const schemas = {
       email: { type: 'string', format: 'email', example: 'joao@teste.com' },
       senha: { type: 'string', example: 'SenhaSegura1' },
     },
+  },
 
-    SolicitarRedefinicaoSenha: {
-      type: 'object',
-      required: ['email'],
-      properties: { email: { type: 'string', format: 'email', example: 'joao@teste.com' } },
-    },
+  SolicitarRedefinicaoSenha: {
+    type: 'object',
+    required: ['email'],
+    properties: { email: { type: 'string', format: 'email', example: 'joao@teste.com' } },
+  },
 
-    RedefinirSenha: {
-      type: 'object',
-      required: ['token', 'senha'],
-      properties: {
-        token: { type: 'string', format: 'hex', minLength: 64, maxLength: 64 },
-        senha: { type: 'string', minLength: 8, example: 'NovaSenhaSegura1' },
-      },
+  RedefinirSenha: {
+    type: 'object',
+    required: ['token', 'senha'],
+    properties: {
+      token: { type: 'string', format: 'hex', minLength: 64, maxLength: 64 },
+      senha: { type: 'string', minLength: 8, example: 'NovaSenhaSegura1' },
     },
   },
 
@@ -1037,7 +1036,6 @@ export const openapi = {
     { name: 'Enderecos', description: 'Enderecos de entrega do consumidor (dado pessoal)' },
     { name: 'Checkout', description: 'Previa e finalizacao da compra (transacao, calculo no servidor)' },
     { name: 'Pedidos', description: 'Pedidos, itens e transicao de status (visao por tipo de usuario)' },
-    { name: 'Pagamentos', description: 'Webhooks do gateway (assinatura HMAC, sem autenticacao de usuario)' },
     { name: 'Admin', description: 'Gestao administrativa (requer perfil administrador)' },
   ],
 
@@ -1282,6 +1280,216 @@ export const openapi = {
             description: 'Nova senha igual a atual.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
+        },
+      },
+    },
+    /*
+     * Logo da propriedade.
+     *
+     * Sao tres operacoes em dois caminhos: o produtor grava e apaga em
+     * /usuarios/logo (autenticado, sempre o proprio perfil), e qualquer
+     * pessoa le em /agricultores/{id}/logo (publico, cacheavel).
+     */
+    '/api/v1/usuarios/logo': {
+      put: {
+        tags: ['Usuarios'],
+        summary: 'Envia a logo da propriedade',
+        description:
+          'Recebe multipart/form-data com um unico arquivo no campo `logo`. Aceita JPEG, PNG e WebP de ate 5 MB; a imagem e redimensionada para no maximo 800x800 (recorte quadrado central) e convertida para WebP antes de ser gravada. Os bytes ficam no banco e sao servidos por GET /agricultores/{id}/logo.\n\nA identidade vem do token: nao existe id no corpo nem na rota. Um produtor nao consegue gravar a logo de outro.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  logo: { type: 'string', format: 'binary' },
+                },
+                required: ['logo'],
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Logo gravada. Devolve a URL publica da imagem.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        logo_url: { type: 'string', example: '/agricultores/12/logo' },
+                        mime: { type: 'string', example: 'image/webp' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          422: {
+            description:
+              'Arquivo recusado: muito grande (LOGO_MUITO_GRANDE), formato nao aceito (LOGO_FORMATO_INVALIDO) ou corrompido (LOGO_ILEGIVEL).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+      delete: {
+        tags: ['Usuarios'],
+        summary: 'Remove a logo da propriedade',
+        description:
+          'Apaga os bytes da logo. O frontend volta a exibir a imagem padrao. A operacao e idempotente: remover uma logo inexistente tambem responde 200.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Logo removida. `logo_url` volta a ser null.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: { logo_url: { type: 'null', example: null } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+    /*
+     * Avatar do usuario (foto de perfil).
+     *
+     * Um unico caminho, sem id: o avatar e do dono do token. Nao existe
+     * `GET /usuarios/{id}/avatar` - a foto de um consumidor nao e publica,
+     * pelo mesmo motivo que as avaliacoes expoem so o primeiro nome.
+     */
+    '/api/v1/usuarios/avatar': {
+      put: {
+        tags: ['Usuarios'],
+        summary: 'Envia o avatar (foto de perfil)',
+        description:
+          'Recebe multipart/form-data com um unico arquivo no campo `avatar`. Aceita JPEG, PNG e WebP de ate 5 MB; a imagem e recortada em quadrado central, reamostrada para no maximo 512x512 e convertida para WebP antes de ser gravada.\n\nQualquer conta autenticada pode ter avatar - cliente, produtor ou administrador. A identidade vem do token: nao existe id no corpo nem na rota, entao ninguem troca a foto de outra pessoa.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  avatar: { type: 'string', format: 'binary' },
+                },
+                required: ['avatar'],
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Avatar gravado. Devolve o caminho da imagem.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        avatar_url: { type: 'string', example: '/usuarios/avatar' },
+                        mime: { type: 'string', example: 'image/webp' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          422: {
+            description:
+              'Arquivo recusado: muito grande (AVATAR_MUITO_GRANDE), formato nao aceito (AVATAR_FORMATO_INVALIDO) ou corrompido (AVATAR_ILEGIVEL).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+      delete: {
+        tags: ['Usuarios'],
+        summary: 'Remove o avatar',
+        description:
+          'Apaga os bytes do avatar. A interface volta a exibir as iniciais com a cor derivada do nome. A operacao e idempotente: remover um avatar inexistente tambem responde 200.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Avatar removido. `avatar_url` volta a ser null.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: { avatar_url: { type: 'null', example: null } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+        },
+      },
+      get: {
+        tags: ['Usuarios'],
+        summary: 'Imagem do avatar do usuario logado',
+        description:
+          'A resposta NAO e JSON: o corpo sao os bytes da imagem (image/webp), para uso direto em `<img src>`. Responde 404 quando o usuario nao tem avatar - nesse caso o frontend usa as iniciais.\n\nExige `Authorization` (um `<img>` comum nao envia o cabecalho, entao o frontend busca a imagem e monta um object URL). Devolve ETag; uma requisicao com If-None-Match correspondente recebe 304 sem corpo. O `Cache-Control` e `private`, porque a foto e de uma pessoa e so ela pode cachear.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Bytes da imagem.',
+            content: { 'image/webp': { schema: { type: 'string', format: 'binary' } } },
+          },
+          304: { description: 'A imagem nao mudou (If-None-Match). Sem corpo.' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
+        },
+      },
+    },
+    '/api/v1/agricultores/{id}/logo': {
+      get: {
+        tags: ['Agricultores'],
+        summary: 'Imagem da logo da propriedade',
+        description:
+          'Rota publica e cacheavel. A resposta NAO e JSON: o corpo sao os bytes da imagem (image/webp), para uso direto em `<img src>`. Responde 404 quando o produtor nao tem logo - nesse caso o frontend usa a imagem padrao.\n\nDevolve ETag; uma requisicao com If-None-Match correspondente recebe 304 sem corpo, economizando banda e banco.',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        ],
+        responses: {
+          200: {
+            description: 'Bytes da imagem.',
+            content: { 'image/webp': { schema: { type: 'string', format: 'binary' } } },
+          },
+          304: { description: 'A imagem nao mudou (If-None-Match). Sem corpo.' },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
         },
       },
     },
@@ -2965,104 +3173,65 @@ export const openapi = {
         },
       },
     },
-    '/api/v1/webhooks/pagamento': {
-      post: {
-        tags: ['Pagamentos'],
-        summary: 'Notificacao de pagamento do gateway',
+
+    '/api/v1/pedidos/{id}/pagamento/confirmar': {
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+      ],
+      patch: {
+        tags: ['Pedidos'],
+        summary: 'Confirma o recebimento do pagamento (agricultor)',
         description: [
-          'Rota PUBLICA - a unica de negocio sem `checkJwt`. Quem chama e o gateway, que nao tem usuario no sistema.',
+          'Marca como PAGO o pagamento que o produtor autenticado tem a receber neste pedido.',
           '',
-          'A autenticacao e a assinatura HMAC-SHA256 do CORPO BRUTO, no header `x-agrohero-signature`, no formato `sha256=<hex>`. O segredo e `PAYMENT_WEBHOOK_SECRET`.',
+          'Como o pagamento e feito no local da retirada, quem tem autoridade para confirmar o recebimento e quem recebeu. O produtor e identificado pelo TOKEN, e o pagamento por (pedido, produtor) - um produtor nao alcanca o pagamento de outro, e um pedido sem pagamento dele devolve 404.',
           '',
-          'O status do corpo e IGNORADO. O servidor consulta o gateway e aplica a resposta DELE (reconciliacao), o que neutraliza replay de evento antigo.',
+          'A chamada e IDEMPOTENTE: confirmar duas vezes nao e erro, e a resposta indica `ja_estava_pago: true` na segunda vez. Um pedido cancelado devolve 422.',
           '',
-          'Responde 200 mesmo quando nada muda (evento duplicado ou pagamento desconhecido): um status de erro faria o gateway reenviar indefinidamente um evento que nunca vai casar. 403 significa assinatura invalida.',
+          'O corpo e vazio de proposito. O valor foi decidido no checkout e nada enviado pelo cliente entra no calculo.',
         ].join('\n'),
-        parameters: [
-          {
-            name: 'x-agrohero-signature',
-            in: 'header',
-            required: true,
-            schema: { type: 'string', example: 'sha256=3f2a...' },
-            description: 'HMAC-SHA256 do corpo bruto, prefixado com "sha256=".',
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            'application/json': { schema: { $ref: '#/components/schemas/WebhookPagamentoEntrada' } },
-          },
-        },
+        security: [{ bearerAuth: [] }],
         responses: {
           200: {
-            description: 'Notificacao recebida (processada ou ignorada de forma justificada).',
+            description: 'Recebimento confirmado (ou ja constava como pago).',
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
                   properties: {
                     sucesso: { type: 'boolean', example: true },
-                    dados: { $ref: '#/components/schemas/WebhookPagamentoResultado' },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        pagamento: { $ref: '#/components/schemas/Pagamento' },
+                        ja_estava_pago: { type: 'boolean', example: false },
+                        pedido_pagamento: {
+                          type: 'object',
+                          description: 'Agregado do pedido inteiro, sem expor valores de outros produtores.',
+                          properties: {
+                            pagamentos: { type: 'integer', example: 2 },
+                            pagos: { type: 'integer', example: 1 },
+                            todos_pagos: { type: 'boolean', example: false },
+                          },
+                        },
+                      },
+                    },
                   },
                 },
               },
             },
           },
-          403: {
-            description: 'Assinatura ausente ou invalida.',
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          404: {
+            description: 'Nao ha pagamento deste produtor no pedido.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
           422: {
-            description: 'Falha ao reconciliar com o gateway; o gateway deve tentar de novo.',
+            description: 'Pedido cancelado ou pagamento em estado nao confirmavel.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
-          500: {
-            description: 'Webhook nao configurado (PAYMENT_WEBHOOK_SECRET ausente).',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
-          },
-        },
-      },
-    },
-
-    '/api/v1/webhooks/pagamento/{identificador}': {
-      parameters: [
-        {
-          name: 'identificador',
-          in: 'path',
-          required: true,
-          schema: { type: 'string' },
-          description: 'Id da transacao no gateway.',
-        },
-      ],
-      post: {
-        tags: ['Pagamentos'],
-        summary: 'Notificacao de pagamento com identificador na URL',
-        description:
-          'Mesma operacao, para gateways que mandam o id no caminho em vez do corpo (o Mercado Pago usa `?data.id=`, outros usam o path). A assinatura e verificada da mesma forma.',
-        parameters: [
-          {
-            name: 'x-agrohero-signature',
-            in: 'header',
-            required: true,
-            schema: { type: 'string' },
-          },
-        ],
-        responses: {
-          200: {
-            description: 'Notificacao recebida.',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    sucesso: { type: 'boolean', example: true },
-                    dados: { $ref: '#/components/schemas/WebhookPagamentoResultado' },
-                  },
-                },
-              },
-            },
-          },
-          403: { $ref: '#/components/responses/SemPermissao' },
         },
       },
     },

@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import PainelAgricultor from '../pages/PainelAgricultor.jsx';
 import { AuthProvider } from '../contexts/AuthContext.jsx';
 import { NotificacaoProvider } from '../contexts/NotificacaoContext.jsx';
+import { RotaPorTipo } from '../routes/Guards.jsx';
 import Notificacoes from '../components/Notificacoes.jsx';
 import { removerToken, salvarToken } from '../services/api.js';
 import {
@@ -39,7 +40,20 @@ function renderizarComoTipo(token) {
         <NotificacaoProvider>
           <Notificacoes />
           <Routes>
-            <Route path="/agricultor" element={<PainelAgricultor />} />
+            {/*
+             * A rota usa o MESMO <RotaPorTipo> do App, e nao o painel
+             * solto. A pagina assume que existe usuario carregado, e e o
+             * guard que segura o render ate o perfil chegar (mesma
+             * convencao de perfil.teste.jsx).
+             *
+             * Sem o guard, o fetch do painel pode terminar antes do
+             * AuthContext.buscarPerfil e a pagina le `usuario.nome` de um
+             * usuario ainda null - o TypeError desmonta a arvore e o teste
+             * falha de forma intermitente.
+             */}
+            <Route element={<RotaPorTipo tipos={['agricultor']} />}>
+              <Route path="/agricultor" element={<PainelAgricultor />} />
+            </Route>
           </Routes>
         </NotificacaoProvider>
       </AuthProvider>
