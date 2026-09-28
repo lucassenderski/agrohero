@@ -1,4 +1,5 @@
 import './Footer.css';
+import SaudeRodape from './SaudeRodape.jsx';
 
 export default function Footer() {
   const ano = new Date().getFullYear();
@@ -23,6 +24,12 @@ export default function Footer() {
           <span>Pagamento na retirada: PIX, cartao ou dinheiro</span>
           <span>© {ano} Agro Hero</span>
         </div>
+      </div>
+      <div className="container footer__base">
+        <SaudeRodape />
+        <span className="footer__credito">
+          Criado por Lucas Senderski · RU: 4758862
+        </span>
       </div>
     </footer>
   );

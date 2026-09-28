@@ -28,6 +28,38 @@
 .footer__marca > span { color: var(--cor-primaria-300); font-size: .65rem; letter-spacing: .12em; }
 .footer__marca p { max-width: 32ch; margin-top: var(--esp-2); }
 
+/*
+ * Base do rodape: status da API e credito do autor. Discreto de
+ * proposito - informacao de infraestrutura, nao conteudo de destaque.
+ */
+.footer__base {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2) var(--esp-4);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--esp-7);
+  padding-top: var(--esp-4);
+  border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+.footer__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-1) var(--esp-3);
+  font-size: .68rem;
+  color: #7c7f7b;
+  letter-spacing: .02em;
+}
+
+.footer__status span { color: #7c7f7b; font-size: .68rem; }
+
+.footer__credito {
+  font-size: .68rem;
+  color: #7c7f7b;
+  letter-spacing: .02em;
+}
+
 @media (min-width: 768px) {
   .footer__interno {
     flex-direction: row;
