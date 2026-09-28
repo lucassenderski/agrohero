@@ -8,6 +8,7 @@ import { validarSenha } from '../utils/validacao.js';
 import { ESTADOS } from '../utils/estados.js';
 import { MensagemErro, Selo } from '../components/ui.jsx';
 import MeusEnderecos from '../components/MeusEnderecos.jsx';
+import UploadLogo from '../components/UploadLogo.jsx';
 import MinhasAvaliacoes from '../components/MinhasAvaliacoes.jsx';
 import '../components/pedido.css';
 
@@ -217,6 +218,20 @@ export default function Perfil() {
               Essas informações aparecem no seu perfil público e ajudam os clientes a
               conhecerem sua produção.
             </p>
+
+            {/*
+             * A logo fica FORA do <form> de dados.
+             *
+             * Ela e um multipart enviado no proprio momento da escolha, com
+             * sua propria acao; dentro do formulario, o clique em "Salvar
+             * dados" reenviaria o arquivo junto (ou, pior, o usuario
+             * acharia que precisava salvar para a logo valer).
+             */}
+            <UploadLogo
+              logoUrl={usuario.agricultor?.logo_url}
+              nomePropriedade={usuario.agricultor?.nome_fazenda}
+              aoAtualizar={recarregarPerfil}
+            />
 
             <div className="campo">
               <label className="campo__rotulo" htmlFor="nome_fazenda">

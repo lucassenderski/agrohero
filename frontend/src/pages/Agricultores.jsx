@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { listarProdutores } from '../services/catalogo.js';
 import { useRequisicao } from '../hooks/useRequisicao.js';
 import { Carregando, MensagemErro, EstadoVazio, Estrelas } from '../components/ui.jsx';
+import LogoPropriedade from '../components/LogoPropriedade.jsx';
 
 /*
  * Lista de produtores.
@@ -45,18 +46,11 @@ export default function Agricultores() {
               to={`/agricultores/${produtor.id}`}
               className="produtor-card"
             >
-              {produtor.imagem_url ? (
-                <img
-                  className="produtor-card__imagem"
-                  src={produtor.imagem_url}
-                  alt={produtor.nome_fazenda}
-                  loading="lazy"
-                />
-              ) : (
-                <div className="produtor-card__sem-imagem" aria-hidden="true">
-                  🚜
-                </div>
-              )}
+              <LogoPropriedade
+                logoUrl={produtor.logo_url}
+                nome={produtor.nome_fazenda}
+                className="produtor-card__imagem"
+              />
 
               <div className="produtor-card__corpo">
                 <h2 className="produtor-card__nome">{produtor.nome_fazenda}</h2>
