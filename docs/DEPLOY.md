@@ -268,28 +268,41 @@ Registro do commit que estava no ar, para poder retornar a ele se uma alteraçã
 | Data | Commit | Assunto | Evidência |
 |---|---|---|---|
 | 2026-09-21 | `c2a97a3` | Agents/frontend style update request (#1) | bundle do site confere com o build deste commit |
+| 2026-09-28 | `13f7843` | Merge do PR #2: receitas + pagamento na retirada | bundle publicado confere com o build deste commit |
+
+### Quais serviços servem o quê (conferido em 2026-09-28)
+
+Duas descobertas ao publicar:
+
+- **O frontend de produção é o Vercel, não o static site do Render.** A vitrine que funciona está em `https://agrohero-six.vercel.app` (projeto `agrohero` no Vercel, ligado a este repositorio, producao = `main`). O `agrohero-web.onrender.com` existe e responde, mas o `CORS_ORIGINS` da API libera a origem do Vercel (`https://agrohero-six.vercel.app`) - ou seja, e a origem do Vercel que o backend reconhece como "o frontend". Ao mexer em URLs, use a origem do Vercel; apontar para a do Render da `403 CORS_BLOQUEADO`.
+- **A API e `https://agrohero.onrender.com`**, nao `agrohero-api.onrender.com` (esse ultimo nao resolve). O servico no painel do Render chama-se `agrohero-api`, mas a URL publica e `agrohero.onrender.com`. O `VITE_API_URL` correto e `https://agrohero.onrender.com/api/v1`.
 
 **Como o commit foi confirmado.** Não basta olhar o painel do Render: ele mostra o último deploy *disparado*, que pode ter falhado e deixado a versão anterior no ar. O que prova é o artefato. Reconstruindo o frontend deste commit com o mesmo `VITE_API_URL` da produção, o Vite gera nomes de arquivo derivados do conteúdo:
 
 ```
 VITE_API_URL=https://agrohero.onrender.com/api/v1 npm run build
-  dist/assets/index-D428IuJ9.js   278.80 kB
-  dist/assets/index-CDKZtmvQ.css   37.16 kB
+  dist/assets/index-CmGKd0IQ.js   306.12 kB
+  dist/assets/index-CpZtM69n.css   47.08 kB
 ```
 
-Foram exatamente esses dois nomes que o site publicado serviu (`index-D428IuJ9.js`, `index-CDKZtmvQ.css`), então o que está no ar é este commit, e não um deploy posterior.
+Foram exatamente esses dois nomes que o site publicado serviu (`index-CmGKd0IQ.js`, `index-CpZtM69n.css`), então o que está no ar é o commit `13f7843`. O bundle confirma o conteúdo: contém "Pagamento na retirada" e "Confirmar recebimento", e **nenhuma** ocorrencia de `BOLETO`, `Mercado Pago` ou `APROVADO`.
 
-Para repetir a conferência a qualquer momento:
+Provas adicionais de que a `008` foi aplicada (o servidor so sobe se a migration passar):
+
+```
+PATCH /api/v1/pedidos/1/pagamento/confirmar   -> 401  (rota existe, exige token)
+POST  /api/v1/pagamentos/webhook              -> 404  (rota do gateway removida)
+GET   /api/v1/docs                            -> 404  (docs desativadas em producao)
+```
+
+Para repetir a conferência do artefato a qualquer momento:
 
 ```bash
-ok=$(curl -s https://agrohero-web.onrender.com | grep -oE 'index-[A-Za-z0-9_-]+\.js' | head -1)
+ok=$(curl -s https://agrohero-six.vercel.app | grep -oE 'index-[A-Za-z0-9_-]+\.js' | head -1)
 echo "no ar: $ok"
 ```
 
-**O que este estado tem.** O app publicado funciona no fluxo principal, mas duas coisas estão fora do lugar e foram descobertas na auditoria:
-
-- o `CORS_ORIGINS` do `agrohero-api` **não inclui** a origem do próprio frontend, então a API responde `403 CORS_BLOQUEADO` e a vitrine publicada mostra "Não foi possível falar com o servidor". A causa é o valor de espaço reservado (`https://exemplo.com`) que a seção 3 manda usar na primeira criação e que nunca foi corrigido;
-- o pacote publicado é anterior à página de receitas.
+> **O `CORS_ORIGINS` continua com o valor de espaço reservado `https://exemplo.com`.** Isso e **inofensivo para o Vercel** - a API libera `https://agrohero-six.vercel.app` por outro caminho, e a vitrine carrega normalmente. Mas o `agrohero-web.onrender.com` fica com a vitrine quebrada. Se quiser que ele funcione tambem, acrescente a origem dele a lista (separada por virgula).
 
 ### Como voltar para este commit
 
