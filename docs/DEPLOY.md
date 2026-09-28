@@ -318,9 +318,31 @@ Para o deploy da refatoração de pagamento (pagamento na retirada, sem gateway)
 1. antes de publicar, rodar as suítes e guardar o resultado (backend `npm test`, frontend `npx vitest run` - ver a ordem em `AGENTS.md`, o teste do backend esvazia `categorias`);
 2. publicar a branch `feature/pagina-receitas` (ou o merge dela na `main`);
 3. conferir o artefato publicado, como acima;
-4. se algo der errado, **Redeploy** de `c2a97a3` no painel do `agrohero-web` e do `agrohero-api`. Como a refatoração não adiciona migration destrutiva irreversível (a `008` só remove colunas do gateway e adiciona `agricultor_id`), o banco continua compatível com a versão antiga.
+4. se algo der errado, **Redeploy** de `c2a97a3` no painel do `agrohero-web` e do `agrohero-api`. Isso volta o código e os artefatos. **Atenção ao banco:** a `008` aplicada pela versão nova altera o schema (remove as colunas do gateway, adiciona `agricultor_id`, troca as constraints), e o código antigo (`c2a97a3`) **não** é compatível com esse schema - ele grava `identificador_externo` e `resumo_gateway`, que a `008` apaga. Voltar o código sem voltar o banco deixa o checkout antigo quebrado. Se precisar reverter de verdade, o ponto de restauração é o **backup do Neon feito antes do deploy** (branch/restore point), não só o Redeploy.
 
-> A `008` mexe no banco. Ela roda no `startCommand` do Render antes do servidor subir. O `DROP COLUMN` das colunas do gateway é irreversível, mas é seguro enquanto `pagamentos` estiver sem linhas (dev e teste estão zerados). **Se a produção tiver linhas em `pagamentos`, fazer um backup do Neon antes de publicar** - o DROP apagaria `identificador_externo` sem chance de reconciliar transação antiga.
+> **A `008` mexe no banco e o `startCommand` é `npm run migrate && npm start`.** O `DROP COLUMN` das colunas do gateway é irreversível, e a migration tem uma **pré-condição que não é óbvia**: `pagamentos` precisa estar **sem linhas**. Verificado em dev e teste (ambos zerados). Se a produção tiver **qualquer** linha em `pagamentos` com o vocabulário antigo, a migration falha e o deploy **aborta** (o `&&` impede o servidor de subir; a versão antiga continua no ar). O erro é:
+>
+> ```
+> check constraint "pagamentos_metodo_valido" of relation "pagamentos" is violated by some row
+> ```
+>
+> Repro: banco com as migrations 001-007, um pagamento `BOLETO`/`APROVADO`, rodar a `008`. Falha no `ADD CONSTRAINT pagamentos_metodo_valido`, que valida as linhas existentes contra `IN ('PIX','CARTAO','DINHEIRO')`. As colunas do gateway já teriam sido removidas antes, mas a migration roda em transação própria, então **nada é aplicado**.
+>
+> **Se a produção tiver linhas em `pagamentos`, normalizar ANTES de publicar** (e fazer backup do Neon como rede de segurança):
+>
+> ```sql
+> -- 1. conferir o que existe
+> SELECT metodo, status, count(*) FROM pagamentos GROUP BY 1, 2;
+> -- 2. alinhar ao vocabulario novo, preservando o que ja aconteceu
+> UPDATE pagamentos SET metodo = 'CARTAO' WHERE metodo IN ('BOLETO', 'SIMULADO');
+> UPDATE pagamentos SET status = 'PAGO'   WHERE status IN ('APROVADO', 'REEMBOLSADO');
+> UPDATE pagamentos SET status = 'PENDENTE' WHERE status = 'RECUSADO';
+> -- 3. conferir que sobrou so PIX/CARTAO/DINHEIRO e PENDENTE/PAGO/CANCELADO
+> SELECT DISTINCT metodo FROM pagamentos;
+> SELECT DISTINCT status FROM pagamentos;
+> ```
+>
+> Note que a `008` também **zera `identificador_externo`** - se houver linhas, a conciliação com o Mercado Pago se perde. O `APROVADO -> PAGO` é o mapeamento honesto (aprovaram, então está pago), mas um `RECUSADO -> PENDENTE` volta a cobrar a retirada de quem teve o pagamento recusado. Se houver esse caso, decidir linha a linha em vez de rodar o `UPDATE` acima.
 
 ---
 

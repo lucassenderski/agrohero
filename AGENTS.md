@@ -112,6 +112,14 @@ Suíte de testes: 578 no backend (22 suítes) e 45 no frontend (6 suítes), todo
 
 **Casamento de ingrediente por `includes` casava dentro de outra palavra.** A receita compara o termo do ingrediente com o nome do produto, e o termo `mel` casava em "Frutas Ver**mel**has" - a receita de sopa oferecia uma geleia no lugar do mel. Como `casarIngredientes` devolve o **primeiro** produto que casa, um falso positivo ainda esconde o produto certo. A comparacao e por palavra inteira (regex com `\b`), em `frontend/src/dados/receitas.js`. Cuidado com termos curtos (mel, ovo, sal) em nome de produto.
 
+**Migration de DDL que troca constraint não roda sobre dados do vocabulário antigo.** A `008` troca as constraints de `pagamentos` para `metodo IN ('PIX','CARTAO','DINHEIRO')` e `status IN ('PENDENTE','PAGO','CANCELADO')`. O `ADD CONSTRAINT` valida as linhas **existentes**, então **qualquer** linha antiga (um `BOLETO`/`APROVADO` que sobreviveu de um teste de produção) faz a migration falhar e o deploy abortar:
+```
+check constraint "pagamentos_metodo_valido" of relation "pagamentos" is violated by some row
+```
+Em transação própria, então nada é aplicado pela metade - o banco fica intacto e a versão antiga continua no ar. O comentário no topo da `008` diz "os bancos estão com ZERO linhas", mas isso foi verificado só em **dev e teste**; a produção (Neon) não é alcançável daqui. Antes de publicar uma migration de constraint, normalizar os dados na origem. Ver `docs/DEPLOY.md` seção 9.
+
+**Código antigo e migration reversa não andam juntos.** Fazer Redeploy de `c2a97a3` depois de aplicar a `008` volta o código, mas não o schema: o código antigo grava `identificador_externo`/`resumo_gateway`, que a `008` apagou. O rollback de verdade exige o backup do banco (restore point/branch do Neon). Rollback de aplicação e de schema são decisões separadas.
+
 **A suite do backend apaga o schema do banco de teste, e a suite do frontend depende dele.** `npm test` no backend recria o schema do zero e reaplica as migrations, o que **esvazia `categorias`**. Os testes do frontend nao mockam a API: eles criam produtos de verdade, e `criarProduto` usa `categorias[0].id`. Rodar o backend e depois o frontend sem re-semear dá 19 falhas em cascata, todas com `Cannot read properties of undefined (reading 'id')` em `ajudantes.js` - parece regressao de interface, mas e o banco sem categorias. A ordem que funciona:
 ```bash
 cd backend && npm test                                  # recria o schema
