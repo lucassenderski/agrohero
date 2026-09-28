@@ -381,6 +381,9 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | GET | `/api/v1/usuarios/profile` | 🔐 | Perfil do usuário logado |
 | PUT | `/api/v1/usuarios/profile` | 🔐 | Editar o próprio perfil |
 | PUT | `/api/v1/usuarios/senha` | 🔐 | Trocar a própria senha |
+| PUT | `/api/v1/usuarios/avatar` | 🔐 | Enviar/trocar a própria foto de perfil (multipart) |
+| GET | `/api/v1/usuarios/avatar` | 🔐 | Bytes da própria foto (o dono é o do token; não aceita id) |
+| DELETE | `/api/v1/usuarios/avatar` | 🔐 | Remover a própria foto (volta às iniciais) |
 | GET | `/api/v1/agricultores` | 🔓 | Lista pública de produtores |
 | GET | `/api/v1/agricultores/:id` | 🔓 | Perfil público do produtor |
 | GET | `/api/v1/agricultores/:id/produtos` | 🔓 | Vitrine paginada do produtor |
@@ -526,7 +529,7 @@ O passo a passo completo está em **[docs/DEPLOY.md](docs/DEPLOY.md)**. O reposi
 | PostgreSQL | Neon | sim, permanente | 0,5 GB e 100 h de processamento/mês |
 | Imagens | Cloudinary (futuro) | sim | 3 GB de storage, 10 GB de tráfego |
 
-> **Sobre a linha de imagens:** o upload de arquivo ainda **não está implementado**. O produto guarda apenas `imagem_url`, informada no cadastro. As variáveis `STORAGE_DRIVER` e `CLOUDINARY_*` já existem no `.env.example` e são validadas pelo `env.js`, mas nenhum código as consome ainda — a linha acima é o destino planejado, não algo que o deploy atual use.
+> **Sobre a linha de imagens:** o upload de arquivo existe para a **logo da propriedade** e a **foto de perfil (avatar)**, processadas pelo `sharp` (redimensionadas e convertidas para WebP) e guardadas no próprio PostgreSQL como `BYTEA`. O produto, porém, ainda guarda apenas `imagem_url`, informada no cadastro. As variáveis `STORAGE_DRIVER` e `CLOUDINARY_*` já existem no `.env.example` e são validadas pelo `env.js`, mas nenhum código as consome ainda — a linha acima é o destino planejado para as imagens de produto, não algo que o deploy atual use.
 
 ### O que foi descartado, e por quê
 

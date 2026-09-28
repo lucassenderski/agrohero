@@ -100,7 +100,7 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 578 no backend (22 suítes) e 45 no frontend (6 suítes), todos passando.
+Suíte de testes: 630 no backend (25 suítes) e 54 no frontend (8 suítes), todos passando.
 
 **Produção.** `agrohero-api` e `agrohero-web` no Render, servidos a partir deste repositório. **A versão em produção é `c2a97a3`, marcada pela tag `v1.0.0-producao`** (tag anotada, já publicada em `origin`). Esse é o ponto de rollback: se o deploy da refatoração de pagamento der errado, é para `v1.0.0-producao` que se volta. Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
@@ -120,13 +120,19 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 
 **Código antigo e migration reversa não andam juntos.** Fazer Redeploy de `c2a97a3` depois de aplicar a `008` volta o código, mas não o schema: o código antigo grava `identificador_externo`/`resumo_gateway`, que a `008` apagou. O rollback de verdade exige o backup do banco (restore point/branch do Neon). Rollback de aplicação e de schema são decisões separadas.
 
-**A `009` (logo) não tem pré-condição de dados e é idempotente.** Ela só faz `ADD COLUMN IF NOT EXISTS` em `agricultores` e recria duas constraints (`DROP CONSTRAINT IF EXISTS` + `ADD`). Nenhuma constraint nova é validada contra dados existentes de forma perigosa: as colunas nascem NULL em todas as linhas, e a `CHECK` aceita `NULL/NULL`. O risco que a `008` tinha - constraint nova avaliando linhas antigas de vocabulário obsoleto - **não existe aqui**. Rodar no Neon não exige preparar dados antes.
+**A `009` (logo) não tem pré-condição de dados e é idempotente.** Ela só faz `ADD COLUMN IF NOT EXISTS` em `agricultores` e recria duas constraints (`DROP CONSTRAINT IF EXISTS` + `ADD`). Nenhuma constraint nova é validada contra dados existentes de forma perigosa: as colunas nascem NULL em todas as linhas, e a `CHECK` aceita `NULL/NULL`. O risco que a `008` tinha - constraint nova avaliando linhas antigas de vocabulário obsoleto - **não existe aqui**. Rodar no Neon não exige preparar dados antes. A `010` (avatar) segue exatamente o mesmo padrão em `usuarios`.
+
+**Rota de imagem autenticada não pode ser o `src` de um `<img>`.** A rota do avatar (e a da logo privada) exige o cabeçalho `Authorization`, e o navegador **não** envia cabeçalhos customizados ao buscar o `src` de uma imagem - ele faz a requisição simples. Apontar `<img src="/api/v1/usuarios/avatar">` produz 401 e ícone de imagem quebrada. O caminho correto (implementado em `frontend/src/services/avatar.js` + `hooks/useAvatar.js`) é buscar os bytes com `fetch` + token e montar um `URL.createObjectURL`. Token na query string e rota pública por id foram descartados (vazam credencial / expõem a foto alheia). **A foto é buscada uma vez no `AuthContext`** e compartilhada por cabeçalho e perfil; se cada tela buscasse por conta própria, trocar a foto não refletiria na outra sem reload.
+
+**O jsdom não implementa `URL.createObjectURL`** (confirmado: é `undefined`), e o `fetch` do ambiente não reconhece o `FormData` do jsdom como multipart - envia a string `"[object FormData]"`. Os testes de avatar em `frontend/src/testes/avatar.teste.jsx` trocam `fetch`/`FormData` pelo undici e `File` pelo `node:buffer`, e adicionam um polyfill de `createObjectURL`. A troca é **restrita a esse arquivo** porque os testes rodam em paralelo: mexer no `fetch` global faria os outros usarem o pool do undici e falharem de forma intermitente.
+
+**A mesma foto aparece em dois `<img>` na tela, e `findBy*` falha com "Found multiple elements".** A prévia do upload e o avatar do cabeçalho compartilham o mesmo object URL, então asserções por `alt` precisam de `getAllByAltText` e checar a contagem. A dupla presença é o que prova que o contexto compartilha a busca.
 
 **A suite do backend apaga o schema do banco de teste, e a suite do frontend depende dele.** `npm test` no backend recria o schema do zero e reaplica as migrations, o que **esvazia `categorias`**. Os testes do frontend nao mockam a API: eles criam produtos de verdade, e `criarProduto` usa `categorias[0].id`. Rodar o backend e depois o frontend sem re-semear dá 19 falhas em cascata, todas com `Cannot read properties of undefined (reading 'id')` em `ajudantes.js` - parece regressao de interface, mas e o banco sem categorias. A ordem que funciona:
 ```bash
 cd backend && npm test                                  # recria o schema
 cd backend && node src/database/run-seeds.js            # devolve categorias
-cd frontend && npx vitest run                           # 45 testes
+cd frontend && npx vitest run                           # 54 testes
 ```
 O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 

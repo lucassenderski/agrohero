@@ -102,6 +102,7 @@ Cada arquivo roda dentro de sua própria transação, então uma falha no meio r
 | `007_redefinicao_senha.sql` | `redefinicoes_senha` (tokens de redefinição de senha) |
 | `008_pagamento_na_retirada.sql` | remove as colunas do gateway, adiciona `pagamentos.agricultor_id` e troca as constraints de método e status |
 | `009_logo_propriedade.sql` | `agricultores.logo_bytes` e `logo_mime` (logo enviada pelo produtor, com teto de tamanho) |
+| `010_avatar_usuario.sql` | `usuarios.avatar_bytes` e `avatar_mime` (foto de perfil de qualquer conta, com teto de tamanho) |
 
 ### Seeds
 
