@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import agricultorController from '../controllers/agricultorController.js';
 import { validar } from '../middlewares/validar.js';
+import { limiteImagens } from '../middlewares/rateLimit.js';
 import {
   agricultorIdParamSchema,
   listarAgricultoresQuerySchema,
@@ -59,6 +60,26 @@ router.get(
   '/:id/avaliacoes',
   validar({ params: agricultorIdParamSchema, query: listarAvaliacoesQuerySchema }),
   agricultorController.listarAvaliacoes,
+);
+
+/*
+ * GET /api/v1/agricultores/:id/logo - imagem da propriedade.
+ *
+ * Esta rota fica depois de /:id de proposito, mas nao depende da ordem:
+ * `/:id` casa apenas com um segmento, entao /12/logo nao e capturado por
+ * ele. A ordem importa no caso oposto (um `/:id` generico engolindo um
+ * caminho literal, como acontece em /produtos/meus), que nao e o caso.
+ *
+ * O `params` e validado com o mesmo schema das outras: o id precisa ser
+ * um inteiro positivo. Sem isso, /agricultores/abc/logo chegaria ao
+ * repository com uma string e o Postgres recusaria a comparacao com
+ * bigint - um erro 500 por entrada invalida do cliente.
+ */
+router.get(
+  '/:id/logo',
+  limiteImagens,
+  validar({ params: agricultorIdParamSchema }),
+  agricultorController.obterLogo,
 );
 
 export default router;

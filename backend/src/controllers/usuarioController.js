@@ -45,4 +45,23 @@ export const trocarSenha = asyncHandler(async (req, res) => {
   return respostaSemConteudo(res);
 });
 
-export default { obterPerfil, atualizarPerfil, trocarSenha };
+/*
+ * PUT /usuarios/logo
+ *
+ * Recebe multipart/form-data com o campo `logo`. O multer ja rodou antes
+ * deste handler e deixou o arquivo em `req.file`.
+ */
+export const enviarLogo = asyncHandler(async (req, res) => {
+  const resultado = await usuarioService.salvarLogo(req.usuario.id, req.file);
+
+  return respostaSucesso(res, resultado);
+});
+
+/* DELETE /usuarios/logo - volta para a imagem padrao. */
+export const removerLogo = asyncHandler(async (req, res) => {
+  const resultado = await usuarioService.removerLogo(req.usuario.id);
+
+  return respostaSucesso(res, resultado);
+});
+
+export default { obterPerfil, atualizarPerfil, trocarSenha, enviarLogo, removerLogo };

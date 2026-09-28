@@ -95,6 +95,13 @@ const schemas = {
       endereco: { type: 'string', nullable: true },
       certificacoes: { type: 'array', items: { type: 'string' }, example: ['Organico IBD'] },
       imagem_url: { type: 'string', nullable: true },
+      logo_url: {
+        type: 'string',
+        nullable: true,
+        description:
+          'URL da logo da propriedade para uso em `<img src>`. Null quando o produtor ainda nao enviou logo.',
+        example: '/agricultores/1/logo',
+      },
       ativo: { type: 'boolean', example: true },
     },
   },
@@ -120,6 +127,13 @@ const schemas = {
       estado: { type: 'string', nullable: true, example: 'SP' },
       certificacoes: { type: 'array', items: { type: 'string' }, example: ['Organico IBD'] },
       imagem_url: { type: 'string', nullable: true },
+      logo_url: {
+        type: 'string',
+        nullable: true,
+        description:
+          'URL da logo da propriedade, para uso direto em `<img src>`. Null quando o produtor nao enviou logo - o frontend usa a imagem padrao. Os bytes ficam no banco e sao servidos por GET /agricultores/{id}/logo.',
+        example: '/agricultores/1/logo',
+      },
       ativo: { type: 'boolean', example: true },
       criado_em: { type: 'string', format: 'date-time' },
       atualizado_em: { type: 'string', format: 'date-time' },
@@ -1266,6 +1280,114 @@ export const openapi = {
             description: 'Nova senha igual a atual.',
             content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
           },
+        },
+      },
+    },
+    /*
+     * Logo da propriedade.
+     *
+     * Sao tres operacoes em dois caminhos: o produtor grava e apaga em
+     * /usuarios/logo (autenticado, sempre o proprio perfil), e qualquer
+     * pessoa le em /agricultores/{id}/logo (publico, cacheavel).
+     */
+    '/api/v1/usuarios/logo': {
+      put: {
+        tags: ['Usuarios'],
+        summary: 'Envia a logo da propriedade',
+        description:
+          'Recebe multipart/form-data com um unico arquivo no campo `logo`. Aceita JPEG, PNG e WebP de ate 5 MB; a imagem e redimensionada para no maximo 800x800 (recorte quadrado central) e convertida para WebP antes de ser gravada. Os bytes ficam no banco e sao servidos por GET /agricultores/{id}/logo.\n\nA identidade vem do token: nao existe id no corpo nem na rota. Um produtor nao consegue gravar a logo de outro.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                properties: {
+                  logo: { type: 'string', format: 'binary' },
+                },
+                required: ['logo'],
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Logo gravada. Devolve a URL publica da imagem.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        logo_url: { type: 'string', example: '/agricultores/12/logo' },
+                        mime: { type: 'string', example: 'image/webp' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+          422: {
+            description:
+              'Arquivo recusado: muito grande (LOGO_MUITO_GRANDE), formato nao aceito (LOGO_FORMATO_INVALIDO) ou corrompido (LOGO_ILEGIVEL).',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Erro' } } },
+          },
+        },
+      },
+      delete: {
+        tags: ['Usuarios'],
+        summary: 'Remove a logo da propriedade',
+        description:
+          'Apaga os bytes da logo. O frontend volta a exibir a imagem padrao. A operacao e idempotente: remover uma logo inexistente tambem responde 200.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Logo removida. `logo_url` volta a ser null.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: { logo_url: { type: 'null', example: null } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+    '/api/v1/agricultores/{id}/logo': {
+      get: {
+        tags: ['Agricultores'],
+        summary: 'Imagem da logo da propriedade',
+        description:
+          'Rota publica e cacheavel. A resposta NAO e JSON: o corpo sao os bytes da imagem (image/webp), para uso direto em `<img src>`. Responde 404 quando o produtor nao tem logo - nesse caso o frontend usa a imagem padrao.\n\nDevolve ETag; uma requisicao com If-None-Match correspondente recebe 304 sem corpo, economizando banda e banco.',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        ],
+        responses: {
+          200: {
+            description: 'Bytes da imagem.',
+            content: { 'image/webp': { schema: { type: 'string', format: 'binary' } } },
+          },
+          304: { description: 'A imagem nao mudou (If-None-Match). Sem corpo.' },
+          400: { $ref: '#/components/responses/ErroValidacao' },
+          404: { $ref: '#/components/responses/NaoEncontrado' },
         },
       },
     },

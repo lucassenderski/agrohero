@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import usuarioController from '../controllers/usuarioController.js';
 import { checkJwt } from '../middlewares/checkJwt.js';
+import { requireRole } from '../middlewares/requireRole.js';
+import { uploadArquivo } from '../middlewares/upload.js';
 import { validar } from '../middlewares/validar.js';
 import {
   atualizarPerfilSchema,
@@ -42,5 +44,27 @@ router.put(
   validar({ body: trocarSenhaSchema }),
   usuarioController.trocarSenha,
 );
+
+/*
+ * Logo da propriedade.
+ *
+ * `requireRole('agricultor')` alem do checkJwt: so o produtor tem uma
+ * propriedade para ilustrar. Sem isso, um consumidor autenticado receberia
+ * 404 (perfil de produtor inexistente) em vez de 403 - a resposta certa
+ * para "voce nao pode fazer isto".
+ *
+ * Nao ha `validar({ body })` aqui: o corpo e multipart e o zod so ve
+ * campos de texto. A validacao do arquivo e do `uploadArquivo`, que checa
+ * tamanho e, no service, o formato real pelos bytes.
+ */
+router.put(
+  '/logo',
+  requireRole('agricultor'),
+  uploadArquivo('logo'),
+  usuarioController.enviarLogo,
+);
+
+/* DELETE e nao PUT com corpo vazio: a intencao e "remover", nao "gravar nada". */
+router.delete('/logo', requireRole('agricultor'), usuarioController.removerLogo);
 
 export default router;
