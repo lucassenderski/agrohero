@@ -214,9 +214,11 @@ O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATA
 
 **Transacao testada so por "nada foi gravado" nao esta testada.** Desligar BEGIN/ROLLBACK nao fez os testes de atomicidade falharem, porque a revalidacao barrava tudo antes da primeira escrita. Foi preciso um teste que baixa o estoque de verdade e lanca erro depois, exercitando `emTransacao` diretamente. Vale desconfiar de cobertura de rollback que passa sem nunca ter escrito nada.
 
-**O pagamento acontece no local; o checkout nao cobra nada.** Nao existe gateway, webhook nem estorno. O `POST /checkout` cria o pedido e registra quanto CADA produtor tem a receber na retirada, com status PENDENTE. Quem confirma o recebimento e o produtor, pelo painel dele (`PATCH /pedidos/:id/pagamento`). Isso significa que "pagamento aprovado" nao e um estado possivel na criacao - so PENDENTE, PAGO ou CANCELADO.
+**O pagamento acontece no local; o checkout nao cobra nada.** Nao existe gateway, webhook nem estorno. O `POST /checkout` cria o pedido e registra quanto CADA produtor tem a receber na retirada, com status PENDENTE. Quem confirma o recebimento e o produtor, pelo painel dele (`PATCH /pedidos/:id/pagamento/confirmar`). Isso significa que "pagamento aprovado" nao e um estado possivel na criacao - so PENDENTE, PAGO ou CANCELADO.
 
 **O pagamento e por PRODUTOR, nao por pedido.** Um pedido pode ter itens de varios produtores, e cada um recebe o seu na retirada. Com uma linha por pedido, "quem confirma o recebimento?" nao teria resposta, e um produtor confirmaria o pagamento do produto de outro. A posse e o eixo da seguranca: o agricultor vem do TOKEN, e a consulta e por `(pedidoId, agricultorId)`. Mandar o id de um pedido alheio devolve 404, porque a linha consultada nao existe para ele.
+
+**Quem tenta confirmar recebe codigos diferentes conforme o motivo.** Sao duas barreiras em sequencia, e vale saber qual esta respondendo: um CLIENTE (ou admin) esbarra primeiro no `requireRole('agricultor')` da rota e recebe **403 SEM_PERMISSAO**; um OUTRO AGRICULTOR passa pelo role e para na consulta por posse, recebendo **404 NAO_ENCONTRADO**. Um 404 aqui e o comportamento desejado - um 403 confirmaria que aquele pedido existe e que tem pagamento para alguem.
 
 **A ordem das checagens em `confirmarPagamento` importa.** Primeiro "tem pagamento meu neste pedido?" (404 se nao), e so depois as regras de estado. Invertendo, um produtor de fora receberia "pagamento ja confirmado" a respeito de um pedido que nao e dele - informacao que nao precisa sair daqui.
 
