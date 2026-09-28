@@ -100,7 +100,7 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 630 no backend (25 suítes) e 57 no frontend (10 suítes), todos passando.
+Suíte de testes: 630 no backend (25 suítes) e 58 no frontend (10 suítes), todos passando.
 
 **Produção.** `agrohero-api` no Render e `agrohero-web` no Vercel, servidos a partir deste repositório. A versão em produção é o merge do PR #2 (`13f7843`). O ponto de rollback é a tag `v1.0.0-producao` (`c2a97a3`) — mas, depois da migration `008`, voltar o código exige restaurar também o schema do Neon. A API pública é `agrohero.onrender.com` (não `agrohero-api.onrender.com`) e o frontend de produção é `agrohero-six.vercel.app` (é essa a origem que o CORS libera). Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
@@ -132,7 +132,7 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 ```bash
 cd backend && npm test                                  # recria o schema
 cd backend && node src/database/run-seeds.js            # devolve categorias
-cd frontend && npx vitest run                           # 57 testes
+cd frontend && npx vitest run                           # 58 testes
 ```
 O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 
@@ -142,7 +142,7 @@ O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATA
 - **`home.teste.jsx` usava `findBy*` onde devia usar `getBy*`.** Os placeholders entram no PRIMEIRO render (sincrono); com `findBy`, a espera dava tempo de a API responder e substituir os placeholders pelas categorias reais, e o teste nao achava mais o texto. `getByRole` le exatamente o render atual.
 - **`painelConsumidor.teste.jsx` usava `getBy*` onde devia usar `findBy*`.** Logo apos promover o endereco, o componente faz `await carregar()` e a lista some enquanto a API responde; um `getByText` sincrono rodava nesse intervalo. `findByText` espera a lista voltar. **Regra: `getBy*` so quando o elemento ja esta no DOM; qualquer coisa que dependa de uma resposta da API usa `findBy*`/`waitFor`.**
 
-Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (57/57 apos o rodape). O `asyncUtilTimeout` do `configuracao.js` continua em 6s, mas como teto para telas legitimamente lentas - nao era a causa destas falhas, e elevar o tempo escondia o bug real por mais tempo em vez de corrigi-lo.
+Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (58/58 apos o rodape). O `asyncUtilTimeout` do `configuracao.js` continua em 6s, mas como teto para telas legitimamente lentas - nao era a causa destas falhas, e elevar o tempo escondia o bug real por mais tempo em vez de corrigi-lo.
 
 **Zod descarta campo não declarado, em silêncio.** Um campo ausente do schema é removido sem erro. Foi a causa de um bug: `perfilAgricultorSchema` não declarava `cidade`/`estado`, então o perfil do produtor era gravado sem localização. Ao adicionar campo a um objeto aninhado, conferir se o schema o declara.
 
@@ -267,6 +267,8 @@ Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (57/57 apos o rodape)
 **O `/health` fica FORA do versionamento, e o cliente `api.js` não o alcança.** A rota responde em `/health`, não em `/api/v1/health`, porque é infraestrutura (o health check do Render usa exatamente esse caminho). Como `VITE_API_URL` já inclui o prefixo `/api/v1`, chamar `/health` pelo cliente resultaria em `/api/v1/health` e 404. O status do rodapé (`services/saude.js`) deriva a raiz com `URL_BASE.replace(/\/api\/v\d+\/?$/, '')`. Antes de consumir qualquer endpoint de infraestrutura, conferir onde ele está montado em `app.js`.
 
 **Status de infraestrutura no rodapé nunca pode virar erro visível.** O `SaudeRodape` engole a falha de propósito (o rodapé apenas some com a linha de status) e não faz polling — é uma consulta por montagem do layout. Um `/health` fora do ar não é problema do usuário. O 503 do `/health` ainda traz `dados` úteis (`api: ok`, `banco: indisponivel`), então o serviço lê o corpo antes de decidir pelo status.
+
+**Dados de infraestrutura vão no rodapé, não na front page.** A home já exibiu API/PostgreSQL/ambiente/latência dentro do bloco "Escolha por categoria" — informação que não interessa ao visitante e ocupa o lugar mais visível do site. Passaram para o rodapé, que é o lugar de dado acessório. Há teste dos dois lados: o rodapé exibe, e a home garante que **não** exibe (`home.teste.jsx`), para que o bloco não volte.
 
 **`ErroApi` precisa expor `.mensagem`, e não só `.message`.** Bug real encontrado pelos testes de integração: `ErroApi extends Error` guarda o texto em `.message`, mas TODA a interface lê `falha.mensagem || 'mensagem padrão'` (mesmo nome do campo no envelope de erro da API). O resultado era que nenhum motivo real chegava ao usuário — `ULTIMO_ENDERECO`, `ENDERECO_PRINCIPAL`, `ESTOQUE_INSUFICIENTE` caíam todos no texto genérico. A correção foi um alias `this.mensagem = mensagem` no construtor. Vale desconfiar de qualquer erro que sempre mostra a mesma mensagem.
 
