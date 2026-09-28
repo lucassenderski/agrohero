@@ -100,7 +100,7 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 630 no backend (25 suítes) e 54 no frontend (8 suítes), todos passando.
+Suíte de testes: 630 no backend (25 suítes) e 55 no frontend (9 suítes), todos passando.
 
 **Produção.** `agrohero-api` e `agrohero-web` no Render, servidos a partir deste repositório. **A versão em produção é `c2a97a3`, marcada pela tag `v1.0.0-producao`** (tag anotada, já publicada em `origin`). Esse é o ponto de rollback: se o deploy da refatoração de pagamento der errado, é para `v1.0.0-producao` que se volta. Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
@@ -132,7 +132,7 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 ```bash
 cd backend && npm test                                  # recria o schema
 cd backend && node src/database/run-seeds.js            # devolve categorias
-cd frontend && npx vitest run                           # 54 testes
+cd frontend && npx vitest run                           # 55 testes
 ```
 O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 
@@ -271,6 +271,8 @@ O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATA
 **O primeiro endereço cadastrado vira principal automaticamente.** O backend decide isso; o frontend nunca tenta adivinhar. Por isso `MeusEnderecos` recarrega a lista do servidor após cada escrita em vez de remendar o estado local.
 
 **Nome de dado de teste colidindo com rótulo da interface quebra o teste.** `nome_destinatario: 'Principal'` fazia `getByText('Principal')` achar tanto o nome quanto o selo "Principal" do endereço principal. Usar nomes que não aparecem como rótulo na tela.
+
+**Chave de lista nao pode ser um campo que os placeholders deixam nulo.** A home mostra tres categorias de exemplo (`{ id: null, nome }`) enquanto a API de categorias nao responde. Com `key={categoria.id}` as tres chaves viravam `null`, e o React avisava "Encountered two children with the same key" e deixava os itens indefinidos. O detalhe que engana: os placeholders entram no PRIMEIRO render, antes de qualquer resposta - entao o aviso aparece mesmo com o banco cheio de categorias, e nao e um caso de "banco vazio". Corrigido com `key={categoria.id ?? categoria.nome}` e coberto por `home.teste.jsx`, que espiona `console.error` (contar links nao provaria nada: com chave repetida o React ainda renderiza os itens).
 
 **`window.confirm` precisa de `vi.spyOn` no jsdom.** O diálogo não existe e a remoção fica sem autorização. Lembrar de `mockRestore()` no fim.
 
