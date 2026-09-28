@@ -56,8 +56,15 @@ describe('Home > categorias', () => {
 
     renderizar();
 
+    /*
+     * Assercao SINCRONA de proposito. Os placeholders entram no primeiro
+     * render, antes de qualquer resposta da API. Se usarmos `findBy*`,
+     * ele espera e - se a API responder rapido - encontra as categorias
+     * reais no lugar dos placeholders, falhando por corrida e nao por
+     * defeito. `getBy*` le exatamente o que foi renderizado agora.
+     */
     for (const nome of PLACEHOLDERS) {
-      expect(await screen.findByRole('link', { name: nome })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: nome })).toBeInTheDocument();
     }
 
     const chavesRepetidas = erros.filter((texto) => texto.includes('same key'));

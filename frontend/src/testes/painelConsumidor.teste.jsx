@@ -189,7 +189,13 @@ describe('MeusEnderecos', () => {
       expect(dados.find((e) => e.nome_destinatario === 'Endereco Novo').principal).toBe(true);
     });
 
-    const itemAntigo = screen.getByText('Endereco Antigo').closest('li');
+    /*
+     * Assercao assincrona de proposito. Depois de promover, o componente
+     * faz `await carregar()` e a lista some enquanto a API responde; um
+     * `getByText` sincrono rodaria nesse intervalo e nao acharia o item.
+     * `findByText` espera a lista voltar.
+     */
+    const itemAntigo = (await screen.findByText('Endereco Antigo')).closest('li');
     await usuario.click(within(itemAntigo).getByRole('button', { name: 'Remover' }));
 
     await waitFor(() => {

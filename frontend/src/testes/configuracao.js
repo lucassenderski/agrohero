@@ -13,13 +13,16 @@ import { cleanup, configure } from '@testing-library/react';
  * A suite roda os arquivos em paralelo contra um unico servidor, e o
  * cadastro de usuario passa por bcrypt com 12 rounds - que bloqueia o
  * event loop. Sob essa concorrencia, uma resposta que leva 200ms sozinha
- * as vezes passa de 1s, e o teste falha por tempo, nao por defeito. Era a
- * causa de falhas intermitentes em `painelAgricultor` e
- * `painelConsumidor`, que somem quando o arquivo roda sozinho.
+ * as vezes passa de 1s.
  *
- * Elevar o teto nao esconde defeito: uma assercao errada continua
- * falhando, so demora mais para desistir. Os fluxos mais pesados (compra
- * completa, pedido entregue) seguem com timeout proprio, maior que este.
+ * Isto NAO e a causa das falhas intermitentes da suite: aquelas eram
+ * corridas de teste de verdade (render sem o guard que segura o usuario,
+ * e `getBy*` sincrono no meio de um recarregamento), corrigidas nos
+ * proprios testes. Elevar o teto aqui so evita que uma tela legitima-
+ * mente lenta falhe por tempo; nao esconde defeito - uma assercao errada
+ * continua falhando, so demora mais para desistir. Os fluxos mais
+ * pesados (compra completa, pedido entregue) seguem com timeout proprio,
+ * maior que este.
  */
 configure({ asyncUtilTimeout: 6000 });
 
