@@ -1,0 +1,97 @@
+/*
+ * Avatar: foto de perfil ou iniciais.
+ *
+ * As tres medidas existem porque o mesmo componente aparece em contextos
+ * de densidade diferente: `sm` no cabecalho e nas listas, `md` na pagina
+ * de perfil, `lg` na previa do upload - onde o usuario precisa conferir o
+ * enquadramento antes de enviar.
+ */
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--raio-completo);
+  overflow: hidden;
+  object-fit: cover;
+  background-color: var(--cor-primaria-100);
+  color: var(--cor-primaria-800);
+  font-weight: var(--peso-forte);
+  line-height: 1;
+  user-select: none;
+  border: 1px solid var(--cor-borda);
+}
+
+.avatar--sm {
+  width: 2rem;
+  height: 2rem;
+  font-size: var(--texto-xs);
+}
+
+.avatar--md {
+  width: 2.75rem;
+  height: 2.75rem;
+  font-size: var(--texto-base);
+}
+
+.avatar--lg {
+  width: 8rem;
+  height: 8rem;
+  font-size: var(--texto-2xl);
+}
+
+/*
+ * As iniciais recebem a cor do nome por estilo inline (ver utils/avatar.js).
+ * O texto e branco fixo porque todas as cores da paleta sao escuras o
+ * bastante para passar no contraste AA - a constante esta em
+ * COR_TEXTO_AVATAR, e este e o ponto que precisa mudar junto se a paleta
+ * mudar.
+ */
+.avatar--iniciais {
+  color: #ffffff;
+}
+
+/* Upload do avatar na pagina de perfil. */
+
+.avatar-upload {
+  margin-bottom: var(--esp-4);
+}
+
+.avatar-upload__conteudo {
+  display: flex;
+  gap: var(--esp-4);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.avatar-upload__acoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+  flex: 1;
+  min-width: 12rem;
+}
+
+/*
+ * O input fica escondido do olhar, mas NAO com `display: none`: isso o
+ * removeria da arvore de acessibilidade. A tecnica abaixo mantem o campo
+ * presente para leitores de tela, e o botao visivel cuida do teclado.
+ */
+.avatar-upload__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.avatar-upload__botoes {
+  display: flex;
+  gap: var(--esp-2);
+  flex-wrap: wrap;
+}

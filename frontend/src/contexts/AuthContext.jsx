@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { removerToken, obterToken, configurarPerdaDeSessao } from '../services/api.js';
 import * as authServico from '../services/auth.js';
+import { useAvatar } from '../hooks/useAvatar.js';
 
 /*
  * Contexto de autenticacao.
@@ -87,6 +88,29 @@ export function AuthProvider({ children }) {
     return perfil;
   }, []);
 
+  /*
+   * A foto de perfil vive AQUI, e nao dentro do cabecalho ou do perfil.
+   *
+   * Motivo: a rota do avatar exige o cabecalho `Authorization`, entao a
+   * imagem precisa ser buscada pela aplicacao (ver services/avatar.js) -
+   * e duas telas exibem essa mesma foto. Buscando uma vez no contexto, o
+   * cabecalho e a pagina de perfil compartilham o mesmo object URL, e
+   * trocar a foto em uma atualiza a outra sem recarregar a pagina.
+   *
+   * `versao` e o gatilho: o Perfil o incrementa depois de enviar ou
+   * remover a foto, e o efeito refaz a busca.
+   */
+  const [versaoAvatar, setVersaoAvatar] = useState(0);
+
+  const { url: avatarUrl } = useAvatar({
+    ativo: Boolean(usuario),
+    versao: versaoAvatar,
+  });
+
+  const recarregarAvatar = useCallback(() => {
+    setVersaoAvatar((atual) => atual + 1);
+  }, []);
+
   const valor = useMemo(
     () => ({
       usuario,
@@ -95,12 +119,14 @@ export function AuthProvider({ children }) {
       ehCliente: usuario?.tipo === 'cliente',
       ehAgricultor: usuario?.tipo === 'agricultor',
       ehAdmin: usuario?.tipo === 'administrador',
+      avatarUrl,
       entrar,
       registrar,
       sair,
       recarregarPerfil,
+      recarregarAvatar,
     }),
-    [usuario, carregando, entrar, registrar, sair, recarregarPerfil],
+    [usuario, carregando, avatarUrl, entrar, registrar, sair, recarregarPerfil, recarregarAvatar],
   );
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;

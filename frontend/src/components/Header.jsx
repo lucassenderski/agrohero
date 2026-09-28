@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCarrinho } from '../contexts/CarrinhoContext.jsx';
+import Avatar from './Avatar.jsx';
 import './Header.css';
 
 const NOME_APP = import.meta.env.VITE_APP_NOME || 'AgroHero';
@@ -18,7 +19,8 @@ const NOME_APP = import.meta.env.VITE_APP_NOME || 'AgroHero';
  * 8 links em linha nao cabem na largura de um celular.
  */
 export default function Header() {
-  const { usuario, autenticado, ehCliente, ehAgricultor, ehAdmin, sair } = useAuth();
+  const { usuario, autenticado, ehCliente, ehAgricultor, ehAdmin, sair, avatarUrl } =
+    useAuth();
   const { quantidade } = useCarrinho();
   const navegar = useNavigate();
   const [menuAberto, setMenuAberto] = useState(false);
@@ -121,8 +123,18 @@ export default function Header() {
 
           {autenticado ? (
             <div className="header__usuario">
-              <Link to="/perfil" className="header__link" onClick={fecharMenu}>
-                {usuario.nome?.split(' ')[0] || 'Perfil'}
+              {/*
+               * A foto vem do contexto (busca unica para cabecalho e
+               * perfil). Sem foto, o Avatar cai nas iniciais com a cor
+               * derivada do nome.
+               *
+               * O nome ao lado NAO e redundante: sem foto, o bloco das
+               * iniciais e aria-hidden, e este texto e o que identifica a
+               * conta para quem usa leitor de tela.
+               */}
+              <Link to="/perfil" className="header__link header__link--perfil" onClick={fecharMenu}>
+                <Avatar nome={usuario.nome} url={avatarUrl} tamanho="sm" />
+                <span>{usuario.nome?.split(' ')[0] || 'Perfil'}</span>
               </Link>
               <button type="button" className="botao botao--texto" onClick={aoSair}>
                 Sair

@@ -158,6 +158,19 @@
   margin-top: var(--esp-1);
 }
 
+/*
+ * Link do perfil: avatar + primeiro nome lado a lado.
+ *
+ * Sem o `display: flex` aqui, o avatar (inline-flex) e o nome ficariam
+ * desalinhados pela linha de base do texto - o circulo "flutuando" acima
+ * do nome. `align-items: center` alinha os dois pelo meio.
+ */
+.header__link--perfil {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+}
+
 @media (min-width: 900px) {
   .header__menu-botao {
     display: none;

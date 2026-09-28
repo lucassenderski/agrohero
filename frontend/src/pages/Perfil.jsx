@@ -9,6 +9,7 @@ import { ESTADOS } from '../utils/estados.js';
 import { MensagemErro, Selo } from '../components/ui.jsx';
 import MeusEnderecos from '../components/MeusEnderecos.jsx';
 import UploadLogo from '../components/UploadLogo.jsx';
+import UploadAvatar from '../components/UploadAvatar.jsx';
 import MinhasAvaliacoes from '../components/MinhasAvaliacoes.jsx';
 import '../components/pedido.css';
 
@@ -209,6 +210,24 @@ export default function Perfil() {
               {salvando ? 'Salvando...' : 'Salvar dados'}
             </button>
           </form>
+        </section>
+
+        {/*
+         * Foto de perfil fica FORA do <form> de dados, como a logo.
+         *
+         * Ela e um multipart enviado no proprio momento da escolha, com
+         * sua propria acao; dentro do formulario, o clique em "Salvar
+         * dados" reenviaria o arquivo junto (ou, pior, o usuario acharia
+         * que precisava salvar para a foto valer).
+         *
+         * Vale para TODA conta, e nao so para o produtor: cliente e
+         * administrador tambem tem foto de perfil. Por isso a secao nao
+         * esta sob a condicao de tipo que envolve os dados da
+         * propriedade.
+         */}
+        <section className="painel-secao">
+          <h2 className="painel-secao__titulo">Foto de perfil</h2>
+          <UploadAvatar nome={usuario.nome} />
         </section>
 
         {usuario.tipo === 'agricultor' && (
