@@ -42,7 +42,7 @@ export default function Header() {
           <span>Agro Hero Toledo - PR · Conectando agricultores familiares e consumidores</span>
           <span className="header__barra-links">
             <span>Cadastro seguro & LGPD</span>
-            <span>Sobre a iniciativa</span>
+            <Link to="/sobre">Sobre a iniciativa</Link>
           </span>
         </div>
       </div>

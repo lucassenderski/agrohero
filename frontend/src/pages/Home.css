@@ -55,17 +55,6 @@
 
 .home__acoes { display: flex; flex-wrap: wrap; gap: var(--esp-3); }
 .home__acoes .botao { text-decoration: none; }
-.botao--destaque {
-  background: var(--cor-acento-400);
-  color: #2b260e;
-  border-color: var(--cor-acento-400);
-  font-weight: var(--peso-forte);
-}
-.botao--contorno {
-  background: transparent;
-  border: 1px solid rgba(126, 230, 175, 0.55);
-  color: white;
-}
 .home__beneficios {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

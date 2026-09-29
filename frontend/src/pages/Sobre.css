@@ -1,0 +1,140 @@
+/*
+ * Pagina "Sobre a iniciativa".
+ *
+ * Reusa de proposito a linguagem visual da Home: o hero verde com selo e
+ * a mesma familia de cartoes de superficie. Duplicar o gradiente aqui e
+ * intencional - a Home nao exporta CSS, e extrair um componente so para
+ * o hero acoplaria duas paginas que evoluem por motivos diferentes.
+ */
+.sobre {
+  padding-block: var(--esp-6) var(--esp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-6);
+}
+
+.sobre__hero {
+  min-height: 24rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(2rem, 7vw, 5rem) clamp(1.5rem, 6vw, 5rem);
+  border-radius: 1.6rem;
+  color: white;
+  background:
+    radial-gradient(circle at 78% 20%, rgba(58, 176, 118, 0.32), transparent 34%),
+    linear-gradient(118deg, #00634c 0%, #005440 52%, #172d29 100%);
+  box-shadow: var(--sombra-lg);
+  overflow: hidden;
+}
+
+.sobre__selo {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: var(--texto-xs);
+  font-weight: var(--peso-medio);
+  color: var(--cor-primaria-100);
+  border: 1px solid rgba(126, 230, 175, 0.45);
+  background-color: rgba(0, 150, 99, 0.45);
+  padding: var(--esp-1) var(--esp-3);
+  border-radius: var(--raio-completo);
+  margin-bottom: var(--esp-3);
+}
+
+.sobre__titulo {
+  max-width: 22ch;
+  color: white;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  letter-spacing: -0.05em;
+  margin-bottom: var(--esp-2);
+}
+
+.sobre__titulo mark {
+  color: var(--cor-primaria-900);
+  background: var(--cor-primaria-300);
+  padding-inline: 0.08em;
+}
+
+.sobre__subtitulo {
+  color: var(--cor-primaria-100);
+  max-width: 68ch;
+  margin-bottom: var(--esp-5);
+  font-size: var(--texto-lg);
+}
+
+.sobre__acoes { display: flex; flex-wrap: wrap; gap: var(--esp-3); }
+.sobre__acoes .botao { text-decoration: none; }
+
+.sobre__missao,
+.sobre__distritos {
+  background-color: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-lg);
+  padding: var(--esp-5);
+  box-shadow: var(--sombra-sm);
+}
+
+.sobre__eyebrow {
+  color: var(--cor-primaria-600);
+  font-size: var(--texto-sm);
+  font-weight: var(--peso-forte);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.sobre__secao-titulo {
+  font-size: var(--texto-lg);
+  margin-block: var(--esp-1) var(--esp-3);
+  color: var(--cor-primaria-800);
+}
+
+.sobre__missao p + p { margin-top: var(--esp-3); }
+
+.sobre__missao p {
+  color: var(--cor-texto-suave);
+  max-width: 74ch;
+  line-height: 1.65;
+}
+
+.sobre__missao strong { color: var(--cor-primaria-700); }
+
+.sobre__lista {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--esp-2);
+}
+
+.sobre__distrito {
+  padding: var(--esp-3) var(--esp-4);
+  background-color: var(--cor-primaria-50);
+  border-radius: var(--raio-sm);
+  color: var(--cor-primaria-800);
+  font-weight: var(--peso-medio);
+}
+
+.sobre__proposito {
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border-radius: var(--raio-lg);
+  background: linear-gradient(120deg, var(--cor-primaria-700), var(--cor-primaria-900));
+  color: white;
+  box-shadow: var(--sombra-md);
+}
+
+.sobre__proposito .sobre__eyebrow { color: var(--cor-primaria-200); }
+
+.sobre__proposito-titulo {
+  color: white;
+  margin-block: var(--esp-1) var(--esp-2);
+  font-size: var(--texto-xl);
+}
+
+.sobre__proposito-texto {
+  color: var(--cor-primaria-100);
+  max-width: 68ch;
+}
+
+@media (max-width: 700px) {
+  .sobre__hero { min-height: 0; }
+}
