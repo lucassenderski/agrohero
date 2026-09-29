@@ -40,7 +40,7 @@ cd frontend && npm run dev
 
 Acesse `http://localhost:5173`.
 
-Na Fase 1 a Home mostra um diagnóstico do ambiente. Se aparecer **API: ok** e **PostgreSQL: ok**, a integração está funcionando.
+O rodapé exibe, de forma discreta, o estado real da infraestrutura — `API: ok`, `PostgreSQL: ok`, `Ambiente` e a latência do banco — buscado de `/health` em tempo de execução, junto ao crédito do autor. Esses dados ficam **só no rodapé**: a Home é conteúdo para o consumidor e não mostra informação técnica.
 
 ## Build
 
@@ -88,6 +88,29 @@ cabecalho.
 | Fase | Descrição | Situação |
 |---|---|---|
 | 1 | Estrutura, build, integração com `/health` | ✅ concluída |
-| 15 | Telas e componentes do marketplace | pendente |
-| 16 | Integração completa frontend + backend | pendente |
-| 17–19 | Painéis do consumidor, agricultor e administrador | pendente |
+| 15 | Telas e componentes do marketplace | ✅ concluída |
+| 16 | Integração completa frontend + backend | ✅ concluída |
+| 17–19 | Painéis do consumidor, agricultor e administrador | ✅ concluída |
+
+## Testes
+
+São de integração: **nenhum `fetch` é mockado**, cada teste fala com a API real. Isso é deliberado — o que precisa ser verificado é justamente o que um mock esconderia: o formato do envelope, os nomes dos campos, os códigos de erro e as regras de autorização.
+
+São **62 testes em 11 arquivos**. Exigem um backend no ar, em modo `test` (nesse modo o rate limit fica desligado; sem isso, uma suíte com vários cadastros estoura o limite e falha por motivo errado):
+
+```bash
+# terminal 1 - API em modo de teste
+cd backend
+NODE_ENV=test PORT=3002 \
+  DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test \
+  node src/server.js
+
+# terminal 2 - testes
+cd frontend
+npm test          # executa uma vez (vitest run)
+npm run test:watch
+```
+
+Os testes usam `http://localhost:3002/api/v1` por padrão; para apontar para outro servidor, defina `VITE_API_URL` antes de rodar.
+
+> A suíte do backend **esvazia `categorias`** ao recriar o schema. Como estes testes criam produtos de verdade usando `categorias[0].id`, rode o `run-seeds.js` entre as duas suítes, senão a do frontend falha em cascata.

@@ -1,14 +1,24 @@
 # AgroHero — Marketplace de Produtos Orgânicos
 
-Marketplace que conecta produtores rurais diretamente a consumidores de produtos orgânicos.
+Marketplace que conecta agricultores familiares de Toledo (PR) diretamente a consumidores locais.
 
-O sistema é funcional de ponta a ponta: frontend + backend + PostgreSQL, com autenticação, autorização, catálogo, carrinho, checkout transacional, pedidos e painéis por perfil.
+O sistema é funcional de ponta a ponta — frontend + backend + PostgreSQL — e está **em produção**:
+
+| Camada | Serviço | Endereço |
+|---|---|---|
+| Interface | Vercel | https://agrohero-six.vercel.app |
+| API | Render | https://agrohero.onrender.com |
+| Banco | Neon (PostgreSQL) | — |
+
+Abra a vitrine em **https://agrohero-six.vercel.app**; a API responde em **https://agrohero.onrender.com/health**.
+
+O diferencial do projeto é o **pagamento na retirada**: não há gateway, webhook nem cobrança online. O checkout registra apenas *como* o consumidor pretende pagar e cada produtor confirma o recebimento no próprio painel. Essa decisão vem do público real — o agricultor familiar vende na feira, e um gateway online traria taxas, exigência de conta de recebimento e inadimplência para vendas pequenas.
 
 ---
 
 ## Status do projeto
 
-Desenvolvimento em fases, cada uma testada antes de avançar.
+Desenvolvido em fases, cada uma testada antes de avançar. Fases **0 a 23 concluídas**; a 24 é acompanhamento contínuo.
 
 | Fase | Descrição | Situação |
 |---|---|---|
@@ -32,19 +42,37 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 | 17 | Painel do consumidor (endereços e avaliações) | ✅ |
 | 18 | Painel do agricultor | ✅ |
 | 19 | Painel administrador | ✅ |
-| 20 | Seguranca (auditoria, testes negativos e guarda de producao) | ✅ |
-| 21 | Testes completos (unidade, integracao, cobertura) | ✅ |
+| 20 | Segurança (auditoria, testes negativos e guarda de produção) | ✅ |
+| 21 | Testes completos (unidade, integração, cobertura) | ✅ |
 | 22 | Documentação (OpenAPI sincronizada com o código) | ✅ |
-| 23 | Deploy (blueprint e guia prontos; execução exige contas do usuário) | ✅ |
-| 24 | Testes em produção | pendente |
+| 23 | Deploy (publicado em Vercel + Render + Neon) | ✅ |
+| 24 | Testes em produção (acompanhamento contínuo) | contínuo |
+
+**Estado atual:** 48 rotas de API (65 operações), 22 rotas de interface, 12 tabelas de negócio, 10 migrations, **692 testes passando** (630 no backend, 62 no frontend).
+
+---
+
+## Funcionalidades
+
+### Para o consumidor
+Catálogo com busca, filtros (categoria, produtor, cidade, faixa de preço, disponibilidade) e ordenação; carrinho com revalidação de preço e estoque; múltiplos endereços com um principal; checkout transacional com cálculo de frete; histórico de pedidos; avaliação dos produtos já recebidos.
+
+### Para o agricultor
+Cadastro de produtos com estoque e unidade; ativação/desativação (tirar do ar); reposição de estoque; logo da propriedade; painel com os pedidos que contêm itens seus; atualização do status **por item**; e confirmação do recebimento do pagamento na retirada.
+
+### Para o administrador
+Gestão de categorias (criar, editar, desativar, reativar) e acompanhamento dos pedidos, com avanço de status do pedido inteiro.
+
+### Conteúdo editorial
+As páginas **Receitas** e **Sobre a iniciativa** não dependem da API para o texto: abrem mesmo com o backend fora do ar. As 6 receitas ligam seus ingredientes ao catálogo real (comparação por palavra inteira) para permitir comprar tudo de uma vez. A página `/sobre` apresenta a iniciativa em Toledo-PR, a missão e os distritos atendidos.
 
 ---
 
 ## Tecnologias
 
-**Backend:** Node.js 22, Express 4, PostgreSQL 16, `pg`, JWT, bcrypt, Zod, Helmet, Pino, Swagger  
-**Frontend:** React 18, Vite 5, React Router 6  
-**Banco:** PostgreSQL 16 (Docker Compose em desenvolvimento)  
+**Backend:** Node.js 22, Express 4, PostgreSQL 16, `pg`, JWT, bcrypt, Zod, Helmet, Pino, Swagger, `sharp` (imagens)
+**Frontend:** React 18, Vite 5, React Router 6
+**Banco:** PostgreSQL 16 (Docker Compose em desenvolvimento; Neon em produção)
 **Testes:** backend com Jest + Supertest e frontend com Vitest + Testing Library; ambos de integração, contra PostgreSQL e API reais (sem mocks)
 
 ---
@@ -59,7 +87,7 @@ Desenvolvimento em fases, cada uma testada antes de avançar.
 ### 1. Clonar e entrar no projeto
 
 ```bash
-git clone <url-do-repositorio>
+git clone https://github.com/lucassenderski/agrohero.git
 cd agrohero
 ```
 
@@ -106,8 +134,8 @@ Com o banco no ar:
 
 ```bash
 cd backend
-npm run migrate    # cria as 11 tabelas, indices, triggers e a view
-npm run seed       # cria as 7 categorias e o usuario administrador
+npm run migrate    # cria as 12 tabelas, índices, triggers e a view
+npm run seed       # cria as 7 categorias e o usuário administrador
 ```
 
 O `npm run seed` imprime **uma vez** a senha do administrador:
@@ -140,53 +168,49 @@ O script é idempotente: rodar de novo não duplica produtor nem produto, e **n�
 
 > **Não é para produção.** Os dados são fictícios. Por isso este seed **não** fica na pasta `seeds/`, que roda automaticamente no `npm run seed` — e no plano gratuito do Render o seed é encadeado no `startCommand`, então o que está em `seeds/` pode acabar gravado no banco de produção. Quem decide rodar o catálogo demonstrativo é uma pessoa, com o comando acima.
 
-### 6.1. Banco de testes
+---
 
-Os testes de integração usam um banco separado e descartável:
+## Testes
 
-```bash
-docker exec agrohero_db psql -U agrohero -d postgres -c "CREATE DATABASE agrohero_test;"
-cd backend && npm test
-```
+### Estratégia
 
-Os testes **recriam o schema do zero** a cada execução, então não dependem de você ter rodado as migrations antes.
-
-### 6.2. Estratégia de testes
-
-São dois níveis, cada um cobrindo o que o outro não alcança:
+São **três níveis**, cada um cobrindo o que o outro não alcança:
 
 | Nível | Onde | O que verifica | Quantidade |
 |---|---|---|---|
-| Unidade | `backend/tests/unit/` | funções puras: tradução de erro do PostgreSQL, autorização por papel, escape de busca, guarda de produção | 43 |
-| Integração | `backend/tests/integration/` | rotas de verdade contra PostgreSQL real | 547 |
-| Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 32 |
+| Unidade | `backend/tests/unit/` | funções puras: tradução de erro do PostgreSQL, autorização por papel, escape de busca, guarda de produção, e-mail | 56 |
+| Integração | `backend/tests/integration/` | rotas de verdade contra PostgreSQL real | 574 |
+| Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 62 |
+
+Total: **692 testes** (25 suítes no backend, 11 no frontend).
 
 O frontend não testa com mock porque o que ele precisa verificar é justamente o que um mock esconde: o formato do envelope, os nomes dos campos, os códigos de erro e as regras de autorização.
+
+### Como rodar
+
+Os testes de integração do backend usam um banco separado e descartável, `agrohero_test`:
+
+```bash
+docker exec agrohero_db psql -U agrohero -d postgres -c "CREATE DATABASE agrohero_test;"
+```
 
 ```bash
 cd backend
 npm run test:unit        # só os testes de unidade (rápidos, sem banco)
-npm test                 # tudo
+npm test                 # tudo (recria o schema do zero)
 npm run test:coverage    # com relatório de cobertura
 ```
 
-Cobertura atual do backend: **84% das linhas**. As lacunas estão em caminhos que não têm rota (`requireDono` — ver a nota abaixo).
+Os testes **recriam o schema do zero** a cada execução, então não dependem de você ter rodado as migrations antes.
 
-`requireDono` existe e está testado como unidade, mas nenhuma rota o usa: a checagem de propriedade acontece dentro dos services, que já têm o recurso carregado e podem comparar o dono sem uma segunda consulta ao banco.
+### Testes do frontend
 
-### 6.3. Testes do frontend
-
-Os testes do frontend também são de integração: nenhum `fetch` é mockado, cada
-teste fala com a API de verdade. Por isso eles exigem um backend no ar.
-
-Use um servidor em modo `test`, apontando para o banco descartável
-(`agrohero_test`). Nesse modo o rate limit fica desligado — sem isso, uma suíte
-com vários cadastros estoura o limite de tentativas e falha por motivo errado:
+Também são de integração: nenhum `fetch` é mockado. Exigem um backend no ar, em modo `test` — nesse modo o rate limit fica desligado, sem o que uma suíte com vários cadastros estoura o limite de tentativas e falha por motivo errado:
 
 ```bash
 cd backend
 NODE_ENV=test PORT=3002 \
-  DATABASE_URL_TEST=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test \
+  DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test \
   node src/server.js
 ```
 
@@ -198,47 +222,57 @@ npm test          # executa uma vez (vitest run)
 npm run test:watch
 ```
 
-Os testes usam `http://localhost:3002/api/v1` por padrão. Para apontar para
-outro servidor, defina `VITE_API_URL` antes de rodar:
+Os testes usam `http://localhost:3002/api/v1` por padrão. Para apontar para outro servidor, defina `VITE_API_URL` antes de rodar:
 
 ```bash
 VITE_API_URL=http://localhost:3001/api/v1 npm test
 ```
 
----
+> Se rodar a suíte do backend e depois a do frontend sem resemear, o frontend falha em cascata: o `npm test` do backend recria o schema e **esvazia `categorias`**, e os testes do frontend criam produtos de verdade usando `categorias[0].id`. Resemeie entre as duas suítes:
+> ```bash
+> cd backend && DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test \
+>   node src/database/run-seeds.js
+> ```
 
-### 7. Variáveis sensíveis
-
-O `.env` fica fora do Git (está no `.gitignore`). O `.env.example` mostra só os nomes, com valores de exemplo. Uma chave merece atenção:
-
-| Variável | Para que serve | Se faltar |
-|---|---|---|
-| `JWT_SECRET` | Assina os tokens de acesso | A aplicação não sobe (validação exige 32+ caracteres) |
-
-Gere com um valor aleatório próprio:
+### Cobertura
 
 ```bash
-openssl rand -hex 32
+cd backend && npm run test:coverage
 ```
 
-Não há mais segredo de gateway de pagamento: o pagamento é feito presencialmente, na retirada ou entrega, direto ao produtor, e confirmado por ele no painel. Nenhuma variável de integração de pagamento é necessária.
+| Métrica | Cobertura |
+|---|---|
+| Instruções | 83,09 % |
+| Ramificações | 74,63 % |
+| Funções | 83,94 % |
+| Linhas | 83,71 % |
 
-### 8. Pagamento na retirada
+A cobertura é maior onde importa: **services 91,29 %** (a regra de negócio) e controllers 96,73 %. As lacunas estão em `src/database` (scripts de migration/seed, executados fora dos testes), `enderecoService` e `redefinicaoSenhaService`.
+
+`requireDono` existe e está testado como unidade, mas nenhuma rota o usa: a checagem de propriedade acontece dentro dos services, que já têm o recurso carregado e podem comparar o dono sem uma segunda consulta ao banco.
+
+---
+
+## Pagamento na retirada
 
 Não há gateway, webhook nem estorno. O checkout apenas registra **como** o consumidor pretende pagar — `PIX`, `CARTAO` ou `DINHEIRO` — e o pagamento em si acontece no balcão, entre consumidor e produtor.
 
 O fluxo é:
 
 1. o consumidor escolhe o método no checkout e confirma o pedido;
-2. a API cria uma linha em `pagamentos` por produtor, com status `PENDENTE`;
+2. a API cria uma linha em `pagamentos` **por produtor**, com status `PENDENTE`;
 3. o produtor confirma o recebimento no painel (`PATCH /api/v1/pedidos/:id/pagamento/confirmar`), o que muda o status para `PAGO`;
 4. quando todos os produtores do pedido confirmam, o pedido fica com o pagamento completo.
+
+O pagamento é por produtor, e não por pedido, porque um pedido pode ter itens de vários produtores e cada um recebe o seu. Com uma linha por pedido, "quem confirma o recebimento?" não teria resposta, e um produtor confirmaria o pagamento do produto de outro.
 
 O consumidor não pode confirmar o pagamento: a rota exige o papel `agricultor` e responde **403** para qualquer outro. Um produtor que não participa do pedido recebe **404**, e não 403 — não se confirma a existência de pedido alheio.
 
 Para testar sem interface, use um produtor de demonstração (ver `npm run seed:catalogo`) e chame a rota de confirmação com o token dele.
 
-### 9. Testar as avaliações
+---
+
+## Avaliações
 
 Quem pode avaliar? Três condições precisam valer ao mesmo tempo, e nenhuma delas vem do corpo da requisição:
 
@@ -259,41 +293,33 @@ curl -X POST http://localhost:3001/api/v1/avaliacoes \
 
 # Reputação pública do produto (sem token)
 curl http://localhost:3001/api/v1/avaliacoes/produto/1
-
-# O que este pedido ainda tem para avaliar
-curl http://localhost:3001/api/v1/avaliacoes/pendentes/1 \
-  -H "Authorization: Bearer $TOKEN_CLIENTE"
 ```
-
-Respostas esperadas: **422** (`ITEM_NAO_ENTREGUE`) antes da entrega, **404** se o pedido não for do consumidor ou o produto não estiver nele, **409** ao tentar avaliar o mesmo item duas vezes.
-
-Para editar, envie apenas o que muda. `comentario: null` apaga o texto; omitir o campo mantém o atual:
-
-```bash
-curl -X PUT http://localhost:3001/api/v1/avaliacoes/1 \
-  -H "Authorization: Bearer $TOKEN_CLIENTE" \
-  -H 'Content-Type: application/json' \
-  -d '{"nota":3,"comentario":null}'
-```
-
-A média exposta em `/produtos/:id` (`media_avaliacoes`) e o perfil do produtor se ajustam na hora — inclusive quando uma avaliação é apagada.
 
 ---
 
-## Estrutura do repositório
+## Variáveis sensíveis
 
+O `.env` fica fora do Git (está no `.gitignore`). O `.env.example` mostra só os nomes, com valores de exemplo. As que merecem atenção:
+
+| Variável | Para que serve | Se faltar |
+|---|---|---|
+| `JWT_SECRET` | Assina os tokens de acesso | A aplicação não sobe (validação exige 32+ caracteres) |
+| `DATABASE_URL` | Conexão com o PostgreSQL | `/health` responde 503; a API continua no ar |
+| `CORS_ORIGINS` | Lista branca de origens | O frontend recebe 403 |
+
+Gere um segredo com um valor aleatório próprio:
+
+```bash
+openssl rand -hex 32
 ```
-agrohero/
-├── docker-compose.yml     PostgreSQL local
-├── backend/               API REST (ver backend/README.md)
-└── frontend/              Interface React (ver frontend/README.md)
-```
+
+Não há segredo de gateway de pagamento: o pagamento é feito presencialmente, direto ao produtor, e confirmado por ele no painel. Nenhuma variável de integração de pagamento é necessária.
 
 ---
 
 ## Arquitetura
 
-O backend segue uma arquitetura em camadas, com responsabilidades bem separadas:
+O backend segue uma arquitetura em camadas, com separação estrita de responsabilidades:
 
 ```
 Requisição HTTP
@@ -311,56 +337,45 @@ repositories  único lugar que executa SQL, sempre parametrizado
 database      pool de conexões PostgreSQL
 ```
 
-Regra de ouro: **controller não escreve SQL, repository não decide regra de negócio, service não conhece `req`/`res`**. Isso mantém o checkout testável sem subir servidor HTTP.
+A regra de ouro é: **controller não escreve SQL, repository não decide regra de negócio, service não conhece `req`/`res`**. Isso mantém o checkout testável sem subir servidor HTTP.
+
+Detalhes por módulo: **[backend/README.md](backend/README.md)** e **[frontend/README.md](frontend/README.md)**.
 
 ---
 
 ## Modelo de dados
 
-### Entidades
+**12 tabelas de negócio**, criadas por 10 migrations versionadas e idempotentes.
 
-`usuarios` · `agricultores` · `categorias` · `produtos` · `enderecos` · `carrinhos` · `carrinho_itens` · `pedidos` · `pedido_itens` · `pagamentos` · `avaliacoes`
+| Tabela | Papel |
+|---|---|
+| `usuarios` | Contas dos três perfis (cliente, agricultor, administrador) |
+| `agricultores` | Perfil do produtor, com logo da propriedade |
+| `enderecos` | Endereços de entrega do consumidor (um principal, garantido por índice único parcial) |
+| `categorias` | Categorias do catálogo |
+| `produtos` | Produtos, com estoque, preço e busca textual em português |
+| `carrinhos` / `carrinho_itens` | Carrinho do consumidor (sem preço: o valor oficial vem de `produtos`) |
+| `pedidos` / `pedido_itens` | Pedido e seus itens (status por item, preço congelado) |
+| `pagamentos` | Uma linha por produtor, com status `PENDENTE`/`PAGO`/`CANCELADO` |
+| `avaliacoes` | Avaliação de produto por pedido recebido |
+| `tokens_redefinicao_senha` | Tokens de redefinição de senha |
 
-### Relacionamentos
+Mais a view `produtos_com_avaliacao` e a tabela de controle `migrations`.
 
-```
-usuarios    1 ──── 0..1 agricultores      (um usuário pode ter um perfil de produtor)
-usuarios    1 ──── 0..1 carrinhos
-usuarios    1 ──── N    enderecos
-usuarios    1 ──── N    pedidos           (como consumidor)
-agricultores 1 ─── N    produtos
-categorias  1 ──── N    produtos
-carrinhos   1 ──── N    carrinho_itens    → 1 produtos
-pedidos     1 ──── N    pedido_itens      → 1 produtos, → 1 agricultores
-pedidos     1 ──── N    pagamentos       → 1 agricultores (um por produtor do pedido)
-pedidos     1 ──── N    avaliacoes        → 1 produtos
-```
+Decisões que afetam o código:
 
-Tipos de usuário: `cliente`, `agricultor`, `administrador`.
-
-### Regra multi-agricultor
-
-Um pedido pode conter produtos de vários produtores. Para que o agricultor A nunca altere dados do agricultor B:
-
-- **`pedido_itens.status`** é o status real, por item. Cada agricultor altera apenas os próprios itens.
-- **`pedidos.status`** é derivado do conjunto de itens (todos PENDENTE → PENDENTE; algum em andamento → PROCESSANDO; todos ENVIADO → ENVIADO; todos ENTREGUE → ENTREGUE).
-- `pedido_itens.agricultor_id` é denormalizado de propósito: é ele que permite aplicar a regra de propriedade sem consultar a tabela de produtos.
-
-### Estados do pedido
-
-```
-PENDENTE → PROCESSANDO → ENVIADO → ENTREGUE
-     ↘          ↘          ↘
-            CANCELADO
-```
-
-`ENTREGUE` e `CANCELADO` são terminais. Cancelamento devolve o estoque dos itens cancelados.
+- **`pedido_itens.status` é por item** e `pedidos.status` é derivado por trigger. Um agricultor altera só os itens dele (`WHERE agricultor_id = ...`).
+- **`pedido_itens.agricultor_id` é denormalizado** de propósito, para a checagem de posse não depender de JOIN.
+- **Preços congelados** em `pedido_itens.preco_unitario`; `carrinho_itens` **não guarda preço**.
+- **`pedido.endereco_entrega` é JSONB** (snapshot), não FK — o cliente pode apagar um endereço e o pedido precisa continuar mostrando para onde foi.
+- Constraints no banco são a última linha de defesa (preço > 0, subtotal coerente), mesmo que o service valide antes.
+- `pagamentos` **não tem nenhuma coluna de cartão**, por decisão de segurança.
 
 ---
 
 ## API
 
-Prefixo `/api/v1`. Envelope único:
+Envelope único em todas as respostas:
 
 ```json
 { "sucesso": true, "dados": { }, "paginacao": { "pagina": 1, "limite": 20, "total": 137, "paginas": 7 } }
@@ -369,31 +384,66 @@ Prefixo `/api/v1`. Envelope único:
 
 Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricultor · 🛡️ administrador
 
-**Implementado até agora (Fases 1–5):**
+**Infraestrutura**
 
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
 | GET | `/health` | 🔓 | Saúde da API e do banco |
 | GET | `/api/v1/docs` | 🔓 | Documentação interativa (Swagger UI) |
 | GET | `/api/v1/docs/openapi.json` | 🔓 | Especificação OpenAPI em JSON |
+
+**Autenticação**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | POST | `/api/v1/auth/register` | 🔓 | Cadastro (cliente ou agricultor) |
 | POST | `/api/v1/auth/login` | 🔓 | Login (retorna JWT) |
+| POST | `/api/v1/auth/solicitar-redefinicao` | 🔓 | Envia e-mail de redefinição de senha |
+| POST | `/api/v1/auth/redefinir-senha` | 🔓 | Redefine a senha com o token |
+
+**Usuários**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET | `/api/v1/usuarios/profile` | 🔐 | Perfil do usuário logado |
 | PUT | `/api/v1/usuarios/profile` | 🔐 | Editar o próprio perfil |
 | PUT | `/api/v1/usuarios/senha` | 🔐 | Trocar a própria senha |
 | PUT | `/api/v1/usuarios/avatar` | 🔐 | Enviar/trocar a própria foto de perfil (multipart) |
 | GET | `/api/v1/usuarios/avatar` | 🔐 | Bytes da própria foto (o dono é o do token; não aceita id) |
 | DELETE | `/api/v1/usuarios/avatar` | 🔐 | Remover a própria foto (volta às iniciais) |
+| PUT | `/api/v1/usuarios/logo` | 🧑‍🌾 | Enviar/trocar a logo da propriedade (multipart) |
+| DELETE | `/api/v1/usuarios/logo` | 🧑‍🌾 | Remover a logo da propriedade |
+
+**Agricultores (público)**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET | `/api/v1/agricultores` | 🔓 | Lista pública de produtores |
 | GET | `/api/v1/agricultores/:id` | 🔓 | Perfil público do produtor |
 | GET | `/api/v1/agricultores/:id/produtos` | 🔓 | Vitrine paginada do produtor |
 | GET | `/api/v1/agricultores/:id/avaliacoes` | 🔓 | Avaliações recebidas (perfil público) |
+| GET | `/api/v1/agricultores/:id/logo` | 🔓 | Bytes da logo da propriedade |
+
+**Categorias**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET | `/api/v1/categorias` | 🔓 | Lista categorias ativas |
 | GET | `/api/v1/categorias/:id` | 🔓 | Detalhe por id ou slug |
+
+**Administração de categorias**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET | `/api/v1/admin/categorias` | 🛡️ | Lista incluindo desativadas |
 | POST | `/api/v1/admin/categorias` | 🛡️ | Criar categoria |
 | GET/PUT/DELETE | `/api/v1/admin/categorias/:id` | 🛡️ | Ver, editar, desativar |
 | PATCH | `/api/v1/admin/categorias/:id/ativar` | 🛡️ | Reativar categoria |
+
+**Produtos**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET | `/api/v1/produtos` | 🔓 | Catálogo: busca, filtros, ordenação, paginação |
 | GET | `/api/v1/produtos/:id` | 🔓 | Detalhe público do produto |
 | GET | `/api/v1/produtos/meus` | 🧑‍🌾 | Produtos do próprio agricultor (inclui inativos) |
@@ -402,26 +452,51 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | PATCH | `/api/v1/produtos/:id/disponibilidade` | 🧑‍🌾 | Tirar do ar / recolocar |
 | PATCH | `/api/v1/produtos/:id/estoque` | 🧑‍🌾 | Repor estoque (soma) |
 | DELETE | `/api/v1/produtos/:id` | 🧑‍🌾 | Desativar (exclusão lógica) |
+
+**Carrinho**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET | `/api/v1/carrinho` | 👤 | Carrinho do consumidor (cria na 1ª chamada) |
 | POST | `/api/v1/carrinho/itens` | 👤 | Adicionar produto (soma quantidade) |
 | PATCH | `/api/v1/carrinho/itens/:produtoId` | 👤 | Definir quantidade exata |
 | DELETE | `/api/v1/carrinho/itens/:produtoId` | 👤 | Remover item |
 | DELETE | `/api/v1/carrinho` | 👤 | Esvaziar carrinho |
 | GET | `/api/v1/carrinho/validacao` | 👤 | Revalidar preços e estoque |
+
+**Endereços**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET/POST | `/api/v1/enderecos` | 👤 | Endereços de entrega (dado pessoal) |
 | GET/PUT/DELETE | `/api/v1/enderecos/:id` | 👤 | Detalhe, edição e remoção |
 | PATCH | `/api/v1/enderecos/:id/principal` | 👤 | Definir endereço principal |
+
+**Checkout**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | POST | `/api/v1/checkout/preview` | 👤 | Resumo calculado sem gravar |
 | POST | `/api/v1/checkout` | 👤 | Finalizar compra (transação) |
+
+**Pedidos**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET | `/api/v1/pedidos` | 👤 | Pedidos do consumidor, com itens |
 | GET | `/api/v1/pedidos/agricultor` | 🧑‍🌾 | Itens do produtor (só os dele) |
 | GET | `/api/v1/pedidos/:id` | 🔐 | Detalhe — visão por tipo de usuário |
 | PATCH | `/api/v1/pedidos/:id/cancelar` | 👤 | Cancelar pedido (devolve estoque) |
 | PATCH | `/api/v1/pedidos/:id/itens/:itemId/status` | 🧑‍🌾 | Avançar status do próprio item |
 | DELETE | `/api/v1/pedidos/:id/itens/:itemId` | 🧑‍🌾 | Cancelar o próprio item |
-| GET | `/api/v1/admin/pedidos` | ⚙️ | Todos os pedidos |
-| PATCH | `/api/v1/admin/pedidos/:id/status` | ⚙️ | Avançar pedido inteiro |
+| GET | `/api/v1/admin/pedidos` | 🛡️ | Todos os pedidos |
+| PATCH | `/api/v1/admin/pedidos/:id/status` | 🛡️ | Avançar pedido inteiro |
 | PATCH | `/api/v1/pedidos/:id/pagamento/confirmar` | 🧑‍🌾 | Confirmar recebimento do pagamento (na retirada) |
+
+**Avaliações**
+
+| Método | Rota | Acesso | Descrição |
+|---|---|---|---|
 | GET | `/api/v1/avaliacoes/produto/:produtoId` | 🔓 | Avaliações do produto (média e total) |
 | GET | `/api/v1/avaliacoes/agricultor/:agricultorId` | 🔓 | Avaliações do produtor (com distribuição de notas) |
 | POST | `/api/v1/avaliacoes` | 👤 | Avaliar produto recebido |
@@ -429,19 +504,9 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | GET | `/api/v1/avaliacoes/minhas` | 👤 | Avaliações que o consumidor escreveu |
 | GET | `/api/v1/avaliacoes/pendentes/:pedidoId` | 👤 | Itens entregues e ainda não avaliados |
 
-**Planejado (Fases 15–19):**
-
-| Método | Rota | Acesso | Descrição |
-|---|---|---|---|
-| GET | `/admin/*` | 🛡️ | Métricas, usuários, moderação |
-
 Filtros de `/produtos`: `busca`, `categoria_id`, `agricultor_id`, `cidade`, `estado`, `preco_min`, `preco_max`, `disponivel`, `ordenar`, `pagina`, `limite`.
 
-Documentação interativa das rotas já implementadas: **http://localhost:3001/api/v1/docs**
-
-O Swagger UI executa as requisições direto do navegador, o que ajuda a testar cada fase conforme ela é implementada.
-
-A especificação em JSON fica em `/api/v1/docs/openapi.json` — é ela que serve de base para gerar clientes ou importar no Postman/Insomnia.
+Documentação interativa: **http://localhost:3001/api/v1/docs** (em produção vem desativada). O Swagger UI executa as requisições direto do navegador. A especificação em JSON fica em `/api/v1/docs/openapi.json` — é ela que serve de base para gerar clientes ou importar no Postman/Insomnia.
 
 ### Sincronia entre documentação e código
 
@@ -479,8 +544,7 @@ Todos os schemas referenciados por `$ref` também são verificados, e toda opera
 
 ### Testes de segurança
 
-`backend/tests/integration/seguranca.test.js` cobre o checklist de segurança como
-testes negativos — o que importa é o que o sistema **recusa**:
+`backend/tests/integration/seguranca.test.js` cobre o checklist de segurança como testes negativos — o que importa é o que o sistema **recusa**:
 
 | Área | O que é verificado |
 |---|---|
@@ -510,24 +574,30 @@ testes negativos — o que importa é o que o sistema **recusa**:
 | `npm run seed` | backend | Cria categorias e o administrador |
 | `npm run seed:catalogo` | backend | Catálogo demonstrativo (não usar em produção) |
 | `npm run dev` | backend | API com reload automático |
-| `npm test` | backend | Testes de integração |
+| `npm test` | backend | Todos os testes (recria o schema) |
+| `npm run test:unit` | backend | Só os testes de unidade |
+| `npm run test:coverage` | backend | Testes com relatório de cobertura |
 | `npm run dev` | frontend | Interface em desenvolvimento |
 | `npm run build` | frontend | Build de produção |
+| `npm test` | frontend | Testes do frontend (exige API no ar) |
+| `npm run lint` | frontend | ESLint |
 
 ---
 
 ## Deploy
 
-O passo a passo completo está em **[docs/DEPLOY.md](docs/DEPLOY.md)**. O repositório já traz o blueprint [`render.yaml`](render.yaml) na raiz, que cria os dois serviços de uma vez.
+O passo a passo completo está em **[docs/DEPLOY.md](docs/DEPLOY.md)**. O repositório traz o blueprint [`render.yaml`](render.yaml), que cria a API e o site estático no Render.
 
-### Combinação escolhida
+### Combinação em uso
 
 | Camada | Serviço | Plano gratuito | Limitação principal |
 |---|---|---|---|
-| Frontend | Render (Static Site) | sim | 100 GB de banda/mês |
+| Interface | **Vercel** | sim | — |
 | Backend | Render (Web Service) | sim | hiberna após 15 min; cold start de 30–60 s |
 | PostgreSQL | Neon | sim, permanente | 0,5 GB e 100 h de processamento/mês |
-| Imagens | Cloudinary (futuro) | sim | 3 GB de storage, 10 GB de tráfego |
+| Imagens (produto) | Cloudinary (futuro) | sim | 3 GB de storage, 10 GB de tráfego |
+
+> **A interface de produção é o Vercel**, em `https://agrohero-six.vercel.app`. O `render.yaml` também declara o Static Site do Render (`agrohero-web.onrender.com`), que existe e responde, mas está fora do CORS da API — quem a API reconhece como "o frontend" é a origem do Vercel. Ao mexer em URLs, use a do Vercel; apontar para a do Render dá `403 CORS_BLOQUEADO`. É por isso que existe o `frontend/vercel.json` com o rewrite SPA: sem ele, toda rota profunda responde 404 ao ser aberta direto — o React Router resolve no cliente, mas só depois de o servidor entregar o `index.html`.
 
 > **Sobre a linha de imagens:** o upload de arquivo existe para a **logo da propriedade** e a **foto de perfil (avatar)**, processadas pelo `sharp` (redimensionadas e convertidas para WebP) e guardadas no próprio PostgreSQL como `BYTEA`. O produto, porém, ainda guarda apenas `imagem_url`, informada no cadastro. As variáveis `STORAGE_DRIVER` e `CLOUDINARY_*` já existem no `.env.example` e são validadas pelo `env.js`, mas nenhum código as consome ainda — a linha acima é o destino planejado para as imagens de produto, não algo que o deploy atual use.
 
@@ -554,6 +624,10 @@ O backend **recusa subir** em produção com configuração insegura (regra em `
 - `CORS_ORIGINS` não pode usar `http://`.
 
 A `DATABASE_URL` do Neon deve incluir `?sslmode=require` — o driver `pg` lê esse parâmetro e liga o TLS, sem nenhuma mudança de código.
+
+### Conferir o que está publicado
+
+O painel do provedor mostra o deploy **disparado**, não necessariamente o que está no ar: um deploy que falha não derruba o anterior. A conferência confiável é o artefato — o Vite nomeia os arquivos por hash de conteúdo, então reconstruir o commit candidato e comparar os nomes de `dist/assets` com os que o site serve prova qual commit está publicado. O procedimento e o ponto de rollback (`v1.0.0-producao`) estão na seção 9 de `docs/DEPLOY.md`.
 
 ---
 
