@@ -270,6 +270,7 @@ Registro do commit que estava no ar, para poder retornar a ele se uma alteraçã
 | 2026-09-21 | `c2a97a3` | Agents/frontend style update request (#1) | bundle do site confere com o build deste commit |
 | 2026-09-28 | `13f7843` | Merge do PR #2: receitas + pagamento na retirada | bundle publicado confere com o build deste commit |
 | 2026-09-28 | `3877ebd` | Merge do PR #4: status da API e credito do autor no rodape | `index-CdXIFNOT.js` / `index-XDtJjm7j.css` batem com o build deste commit |
+| 2026-09-28 | `ebc85ec` | Merge do PR #6: tira os dados de infraestrutura da front page | `index-ddnQ2cu0.js` / `index-DXFqNkCm.css` batem com o build deste commit |
 
 ### Quais serviços servem o quê (conferido em 2026-09-28)
 
