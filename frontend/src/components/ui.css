@@ -65,6 +65,24 @@
   padding: var(--esp-1) var(--esp-2);
 }
 
+/*
+ * Variantes para uso sobre o hero verde (fundo escuro). Nao seguem a
+ * paleta dos botoes claros porque precisam de contraste alto ali, e por
+ * isso ficam aqui e nao em cada pagina que monta um hero.
+ */
+.botao--destaque {
+  background: var(--cor-acento-400);
+  color: #2b260e;
+  border-color: var(--cor-acento-400);
+  font-weight: var(--peso-forte);
+}
+
+.botao--contorno {
+  background: transparent;
+  border: 1px solid rgba(126, 230, 175, 0.55);
+  color: white;
+}
+
 .botao--bloco {
   width: 100%;
 }

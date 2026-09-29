@@ -7,6 +7,7 @@ import Produtos from './pages/Produtos.jsx';
 import ProdutoDetalhe from './pages/ProdutoDetalhe.jsx';
 import Categorias from './pages/Categorias.jsx';
 import Receitas from './pages/Receitas.jsx';
+import Sobre from './pages/Sobre.jsx';
 import Agricultores from './pages/Agricultores.jsx';
 import AgricultorDetalhe from './pages/AgricultorDetalhe.jsx';
 import Login from './pages/Login.jsx';
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/produtos/:id" element={<ProdutoDetalhe />} />
         <Route path="/categorias" element={<Categorias />} />
         <Route path="/receitas" element={<Receitas />} />
+        <Route path="/sobre" element={<Sobre />} />
         <Route path="/agricultores" element={<Agricultores />} />
         <Route path="/agricultores/:id" element={<AgricultorDetalhe />} />
         <Route path="/login" element={<Login />} />

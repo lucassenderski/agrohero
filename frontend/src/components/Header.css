@@ -31,6 +31,15 @@
   color: var(--cor-primaria-200);
 }
 
+/* O `a` global tem cor escura, ilegivel sobre a barra verde-escura. */
+.header__barra-links a {
+  color: inherit;
+}
+
+.header__barra-links a:hover {
+  color: #fff;
+}
+
 .header__interno {
   height: var(--altura-header);
   display: flex;

@@ -53,16 +53,25 @@ npm run preview   # serve o build localmente na porta 4173
 
 ```
 frontend/src/
-├── components/  Header, Footer e, nas próximas fases, ProductCard, CartItem, Modal...
-├── contexts/    AuthContext, CartContext (Fase 15)
-├── hooks/       useAuth, useCart, useDebounce (Fase 15)
+├── components/  Header, Footer, ProductCard, CartItem, ui...
+├── contexts/    AuthContext, CarrinhoContext, NotificacaoContext
+├── dados/       receitas.js - conteudo editorial
+├── hooks/       useRequisicao, useAuth, useCarrinho...
 ├── layouts/     MainLayout
-├── pages/       Home, NaoEncontrada
-├── routes/      rotas protegidas por login e por perfil (Fase 15)
-├── services/    api.js - cliente HTTP único
+├── pages/       Home, Produtos, ProdutoDetalhe, Categorias, Receitas,
+│                Sobre, Agricultores, AgricultorDetalhe, Login, Cadastro,
+│                Carrinho, Checkout, Pedidos, Perfil e os paineis
+├── routes/      rotas protegidas por login e por perfil
+├── services/    api.js - cliente HTTP unico
 ├── styles/      tokens.css (design tokens) e global.css
-└── utils/       formatadores (Fase 15)
+└── utils/       formatadores
 ```
+
+**Paginas de conteudo editorial.** `Sobre` e `Receitas` nao dependem da API para o texto
+propriamente dito: o conteudo vive no frontend e a pagina abre mesmo com o backend fora do ar.
+`Receitas` liga os ingredientes ao catalogo real, mas o modo de preparo continua sendo editorial.
+A pagina `Sobre` (`/sobre`) e alcancada pelo link "Sobre a iniciativa" na barra superior do
+cabecalho.
 
 ## Decisões de interface
 
