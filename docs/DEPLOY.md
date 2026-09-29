@@ -271,6 +271,8 @@ Registro do commit que estava no ar, para poder retornar a ele se uma alteraçã
 | 2026-09-28 | `13f7843` | Merge do PR #2: receitas + pagamento na retirada | bundle publicado confere com o build deste commit |
 | 2026-09-28 | `3877ebd` | Merge do PR #4: status da API e credito do autor no rodape | `index-CdXIFNOT.js` / `index-XDtJjm7j.css` batem com o build deste commit |
 | 2026-09-28 | `ebc85ec` | Merge do PR #6: tira os dados de infraestrutura da front page | `index-ddnQ2cu0.js` / `index-DXFqNkCm.css` batem com o build deste commit |
+| 2026-09-28 | `f7c8a32` | Merge do PR #8: pagina "Sobre a iniciativa" | `index-D6UwP-jn.js` / `index-Cq3M5hhm.css` batem com o build deste commit |
+| 2026-09-28 | `ce8e999` | Merge do PR #9: fallback SPA no Vercel | todas as rotas profundas passam a responder 200 (antes 404) |
 
 ### Quais serviços servem o quê (conferido em 2026-09-28)
 
@@ -298,6 +300,14 @@ PATCH /api/v1/pedidos/1/pagamento/confirmar   -> 401  (rota existe, exige token)
 POST  /api/v1/pagamentos/webhook              -> 404  (rota do gateway removida)
 GET   /api/v1/docs                            -> 404  (docs desativadas em producao)
 ```
+
+> **O Vercel precisa de fallback SPA, senao toda rota profunda da 404.** Ate o PR #9 o projeto nao tinha rewrite, e `/produtos`, `/receitas`, `/agricultores`, `/categorias` e `/sobre` respondiam **404** quando abertos direto (link compartilhado, favorito, F5). A navegacao por clique funcionava - o React Router troca a URL no cliente e nada e pedido ao servidor - e por isso o problema ficou invisivel por tanto tempo. A correcao e `frontend/vercel.json`:
+> ```json
+> { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
+> ```
+> O rewrite roda depois da checagem de arquivo existente, entao `/assets/*` continua servido normalmente. Ao conferir o deploy, nao esquecer de testar uma rota profunda - a home respondendo 200 nao prova nada sobre as outras.
+>
+> **O preview do Vercel responde 302 e nao serve para conferir por `curl`.** Os deploys de preview ficam sob SSO da Vercel, entao `curl` recebe `302` para `vercel.com/sso-api` em vez do HTML. A conferencia de conteudo so e possivel no dominio de producao (`agrohero-six.vercel.app`), que fica fora do SSO.
 
 Para repetir a conferência do artefato a qualquer momento:
 
