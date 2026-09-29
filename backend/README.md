@@ -99,7 +99,7 @@ Cada arquivo roda dentro de sua própria transação, então uma falha no meio r
 | `004_pedidos.sql` | `carrinhos`, `carrinho_itens`, `pedidos`, `pedido_itens` e o trigger de sincronização de status |
 | `005_pagamentos_avaliacoes.sql` | `pagamentos`, `avaliacoes` e a view `produtos_com_avaliacao` |
 | `006_view_tipos.sql` | corrige tipos que o driver devolve fora do esperado na view `produtos_com_avaliacao` |
-| `007_redefinicao_senha.sql` | `redefinicoes_senha` (tokens de redefinição de senha) |
+| `007_redefinicao_senha.sql` | `tokens_redefinicao_senha` (tokens de redefinição de senha) |
 | `008_pagamento_na_retirada.sql` | remove as colunas do gateway, adiciona `pagamentos.agricultor_id` e troca as constraints de método e status |
 | `009_logo_propriedade.sql` | `agricultores.logo_bytes` e `logo_mime` (logo enviada pelo produtor, com teto de tamanho) |
 | `010_avatar_usuario.sql` | `usuarios.avatar_bytes` e `avatar_mime` (foto de perfil de qualquer conta, com teto de tamanho) |
@@ -132,9 +132,18 @@ Idempotentes: podem rodar em todo deploy. Criam as 7 categorias e o administrado
 npm test
 ```
 
-46 testes, incluindo os negativos: preço negativo, estoque negativo, total incoerente, subtotal manipulado, nota fora de 1–5, IDOR entre produtores e CEP inválido.
+A suíte tem 630 testes em 25 arquivos, incluindo os negativos: preço negativo, estoque negativo, total incoerente, subtotal manipulado, nota fora de 1–5, IDOR entre produtores e CEP inválido. São 56 de unidade (`tests/unit/`) e 574 de integração (`tests/integration/`).
 
 Os testes recriam o schema do zero a cada execução no banco `agrohero_test`, então não dependem de migrations aplicadas previamente. Não há mock de banco: o objetivo é validar o comportamento real.
+
+### Logo e avatar (imagens)
+
+As imagens do sistema — logo da propriedade e foto de perfil — não vão para disco nem para serviço externo: o `sharp` redimensiona e converte para WebP, e os bytes ficam no próprio PostgreSQL (`agricultores.logo_bytes`/`logo_mime` e `usuarios.avatar_bytes`/`avatar_mime`), com teto de tamanho validado na migration.
+
+Duas consequências que valem registrar:
+
+- **A rota que devolve a imagem exige `Authorization`**, e o navegador não envia cabeçalhos customizados ao buscar o `src` de um `<img>`. Por isso o frontend busca os bytes com `fetch` + token e monta um `URL.createObjectURL` (ver `frontend/src/services/avatar.js`). Token na query string e rota pública por id foram descartados — vazariam credencial ou exporiam a foto alheia.
+- **A foto é buscada uma vez no `AuthContext`** e compartilhada entre cabeçalho e perfil; se cada tela buscasse por conta própria, trocar a foto não refletiria na outra sem recarregar a página.
 
 ## Estrutura
 
@@ -148,13 +157,16 @@ backend/
 │   ├── repositories/ acesso a dados (SQL parametrizado)
 │   ├── routes/       definição das rotas
 │   ├── services/     regra de negócio
-│   ├── utils/        AppError, asyncHandler, resposta, paginação
+│   ├── utils/        AppError, asyncHandler, resposta, paginação, senha, token, sql
 │   ├── validators/   esquemas Zod
+│   ├── docs/         openapi.js (especificação sincronizada com as rotas)
 │   ├── app.js        montagem do Express (sem listen)
 │   └── server.js     subida do servidor e desligamento gracioso
 └── tests/
-    ├── setup.js
-    └── integration/
+    ├── helpers/      recriação do schema e cenários
+    ├── unit/         testes sem banco
+    ├── integration/  rotas de verdade contra PostgreSQL real
+    └── setup.js
 ```
 
 ## Status do desenvolvimento
@@ -175,9 +187,28 @@ backend/
 | 12 | Pedidos e transição de status | ✅ concluída |
 | 13 | Pagamentos na retirada (PIX, cartão, dinheiro) | ✅ concluída |
 | 14 | Avaliações | ✅ concluída |
-| 15–24 | Frontend, painéis, segurança, testes, deploy | pendente |
+| 15 | Frontend (estrutura, rotas, cliente HTTP, contextos) | ✅ concluída |
+| 16 | Integração frontend + backend | ✅ concluída |
+| 17 | Painel do consumidor | ✅ concluída |
+| 18 | Painel do agricultor | ✅ concluída |
+| 19 | Painel administrador | ✅ concluída |
+| 20 | Segurança (auditoria, testes negativos e guarda de produção) | ✅ concluída |
+| 21 | Testes completos (unidade, integração, cobertura) | ✅ concluída |
+| 22 | Documentação (OpenAPI sincronizada com o código) | ✅ concluída |
+| 23 | Deploy (publicado em Vercel + Render + Neon) | ✅ concluída |
+| 24 | Testes em produção | contínuo |
 
-Suíte de testes: **612 testes em 24 suítes**, todos passando (`npm test`).
+Suíte de testes: **630 testes em 25 suítes** (56 de unidade e 574 de integração), todos passando (`npm test`).
+
+## Regras de negócio
+
+### Pagamento na retirada
+
+Não há gateway, webhook nem estorno. O checkout grava o método escolhido (`PIX`, `CARTAO` ou `DINHEIRO`) e cria **uma linha em `pagamentos` por produtor**, com status `PENDENTE`. Quem confirma o recebimento é o próprio produtor (`PATCH /api/v1/pedidos/:id/pagamento/confirmar`).
+
+O pagamento é por produtor, e não por pedido, porque um pedido pode ter itens de vários produtores e cada um recebe o seu — com uma linha por pedido, "quem confirma?" não teria resposta, e um produtor confirmaria o pagamento do produto de outro. A posse é resolvida pelo token: a consulta é por `(pedidoId, agricultorId)`, e o pedido de outro produtor devolve **404**, não 403.
+
+Detalhes que a implementação trata: confirmar duas vezes não é erro (o `UPDATE ... WHERE status = 'PENDENTE'` é condicional; sem linha, relê e responde `ja_estava_pago: true`); pedido cancelado recusa confirmação; e o cancelamento marca como `CANCELADO` apenas os pagamentos ainda `PENDENTE`.
 
 ### Avaliações — a regra de autorização
 

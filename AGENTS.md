@@ -69,7 +69,7 @@ Fluxo de uma requisição: `rota → middleware (auth → autorização → vali
 
 ## Banco de dados
 
-11 tabelas de negócio. Decisões que afetam o código:
+12 tabelas de negócio. Decisões que afetam o código:
 
 - **`pedido_itens.status` é por item**, e `pedidos.status` é derivado por trigger. Um agricultor altera só os itens dele (`WHERE agricultor_id = ...`), que é a regra multi-agricultor.
 - **`pedido_itens.agricultor_id` é denormalizado** de propósito, para a checagem de posse não depender de JOIN.
