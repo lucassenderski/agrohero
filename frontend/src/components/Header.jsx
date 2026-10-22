@@ -39,7 +39,17 @@ export default function Header() {
     <header className="header">
       <div className="header__barra">
         <div className="container header__barra-interna">
-          <span>Agro Hero Toledo - PR · Conectando agricultores familiares e consumidores</span>
+          <span className="header__barra-marca">
+            <img
+              className="header__barra-icone"
+              src="/logo-padrao.svg"
+              alt=""
+              aria-hidden="true"
+              width="18"
+              height="18"
+            />
+            <span>Agro Hero Toledo - PR · Conectando agricultores familiares e consumidores</span>
+          </span>
           <span className="header__barra-links">
             <span>Cadastro seguro & LGPD</span>
             <Link to="/sobre">Sobre a iniciativa</Link>

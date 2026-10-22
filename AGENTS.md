@@ -100,7 +100,7 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 630 no backend (25 suítes) e 62 no frontend (11 suítes), todos passando.
+Suíte de testes: 630 no backend (25 suítes) e 66 no frontend (12 suítes), todos passando.
 
 **Produção.** `agrohero-api` no Render e `agrohero-web` no Vercel, servidos a partir deste repositório. A versão em produção é o merge do PR #2 (`13f7843`). O ponto de rollback é a tag `v1.0.0-producao` (`c2a97a3`) — mas, depois da migration `008`, voltar o código exige restaurar também o schema do Neon. A API pública é `agrohero.onrender.com` (não `agrohero-api.onrender.com`) e o frontend de produção é `agrohero-six.vercel.app` (é essa a origem que o CORS libera). Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
@@ -132,7 +132,7 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 ```bash
 cd backend && npm test                                  # recria o schema
 cd backend && node src/database/run-seeds.js            # devolve categorias
-cd frontend && npx vitest run                           # 62 testes
+cd frontend && npx vitest run                           # 66 testes
 ```
 O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 

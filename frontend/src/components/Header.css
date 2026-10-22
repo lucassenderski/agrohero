@@ -25,6 +25,36 @@
   overflow: hidden;
 }
 
+/*
+ * Marca da barra: icone + texto lado a lado.
+ *
+ * `min-width: 0` no flex item e o que permite o encolhimento abaixo do
+ * tamanho do conteudo; sem ele o texto empurra os links da direita para
+ * fora da tela em vez de truncar.
+ */
+.header__barra-marca {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  min-width: 0;
+}
+
+/*
+ * O truncamento fica no elemento de TEXTO, nao no flex acima:
+ * `text-overflow` so age em caixa de bloco com largura limitada, e um
+ * container flex nao a limita - a regra no pai nao teria efeito.
+ */
+.header__barra-marca > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header__barra-icone {
+  flex: 0 0 auto;
+  display: block;
+  border-radius: 0.35rem;
+}
+
 .header__barra-links {
   display: flex;
   gap: var(--esp-5);

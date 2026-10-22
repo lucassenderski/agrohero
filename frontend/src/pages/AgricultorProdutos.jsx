@@ -12,6 +12,7 @@ import { useFormulario } from '../hooks/useMutacao.js';
 import { Carregando, MensagemErro, EstadoVazio, Modal, Paginacao, Selo } from '../components/ui.jsx';
 import { formatarMoeda, formatarQuantidade } from '../utils/formato.js';
 import { validarPreco, validarEstoque, validarNome } from '../utils/validacao.js';
+import { UNIDADES_PRODUTO } from '../utils/estados.js';
 import '../components/pedido.css';
 
 const PRODUTO_VAZIO = {
@@ -364,11 +365,11 @@ export default function AgricultorProdutos() {
                 value={valores.unidade}
                 onChange={(evento) => alterar('unidade', evento.target.value)}
               >
-                <option value="kg">kg</option>
-                <option value="unidade">unidade</option>
-                <option value="duzia">duzia</option>
-                <option value="litro">litro</option>
-                <option value="maco">maco</option>
+                {UNIDADES_PRODUTO.map((unidade) => (
+                  <option key={unidade} value={unidade}>
+                    {unidade}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="campo">
