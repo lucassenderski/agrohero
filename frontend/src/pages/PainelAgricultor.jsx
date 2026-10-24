@@ -62,9 +62,25 @@ export default function PainelAgricultor() {
   const ativos = produtos.filter((produto) => produto.ativo);
   const baixoEstoque = ativos.filter((produto) => produto.estoque <= ESTOQUE_BAIXO);
 
-  const entregues = itens.filter((item) => item.status === 'ENTREGUE');
+  /*
+   * "Valor vendido" conta o que o produtor ja pode considerar venda:
+   * item ENTREGUE ou com pagamento ja recebido.
+   *
+   * O pagamento e feito na retirada, entao confirmar o recebimento e o
+   * momento em que o dinheiro entra. Esperar o item chegar a ENTREGUE
+   * deixava a metrica parada justamente depois da acao que a fecha.
+   *
+   * Item CANCELADO fica de fora mesmo com pagamento PAGO: o dinheiro
+   * pode ter trocado de mao (o cancelamento do item nao desfaz um
+   * pagamento ja recebido), mas nao e mais uma venda.
+   */
+  const vendidos = itens.filter(
+    (item) =>
+      item.status !== 'CANCELADO' &&
+      (item.status === 'ENTREGUE' || item.pagamento_status === 'PAGO'),
+  );
   const pendentes = itens.filter((item) => item.status === 'PENDENTE');
-  const valorVendido = entregues.reduce((soma, item) => soma + Number(item.subtotal), 0);
+  const valorVendido = vendidos.reduce((soma, item) => soma + Number(item.subtotal), 0);
 
   const pedidosUnicos = new Set(itens.map((item) => item.pedido_id));
 
@@ -100,7 +116,7 @@ export default function PainelAgricultor() {
         <article className="metrica">
           <span className="metrica__rotulo">Valor vendido</span>
           <strong className="metrica__valor">{formatarMoeda(valorVendido)}</strong>
-          <span className="metrica__nota">somente itens entregues</span>
+          <span className="metrica__nota">entregues ou ja pagos</span>
         </article>
 
         <article className="metrica">

@@ -174,4 +174,47 @@ export async function criarPedidoEntregue({ produtorToken, clienteToken, produto
   return pedido;
 }
 
+/*
+ * Cria um pedido com UM item ainda PENDENTE (sem avancar status).
+ *
+ * `criarPedidoEntregue` leva o item ate ENTREGUE, o que esconde o
+ * cenario do bug: a metrica "Valor vendido" precisa reagir ao
+ * recebimento sem depender do status de entrega. Aqui o pedido para no
+ * checkout, e o teste decide o que fazer com ele.
+ *
+ * Devolve o id do item, que e o que as rotas do produtor usam.
+ */
+export async function criarItemPendente({ clienteToken, produto }) {
+  await chamar('/carrinho/itens', {
+    token: clienteToken,
+    corpo: { produto_id: produto.id, quantidade: 1 },
+  });
+
+  const enderecoId = await criarEnderecoDoUsuario(clienteToken);
+
+  const { dados: resultado } = await chamar('/checkout', {
+    token: clienteToken,
+    corpo: { endereco_id: enderecoId, metodo_pagamento: 'PIX' },
+  });
+
+  const pedidoId = resultado.pedido.id;
+
+  const { dados: pedido } = await chamar(`/pedidos/${pedidoId}`, {
+    metodo: 'GET',
+    token: clienteToken,
+  });
+
+  return pedido.itens[0].id;
+}
+
+/* Id do pedido mais recente do produtor, pela visao dele. */
+export async function pedidoDoProdutor(produtorToken) {
+  const { dados } = await chamar('/pedidos/agricultor', {
+    metodo: 'GET',
+    token: produtorToken,
+  });
+
+  return dados[0].pedido_id;
+}
+
 export { chamar, removerToken };

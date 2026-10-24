@@ -12,6 +12,8 @@ import {
   criarClienteLogado,
   criarProduto,
   criarPedidoEntregue,
+  criarItemPendente,
+  pedidoDoProdutor,
   chamar,
 } from './ajudantes.js';
 
@@ -170,6 +172,84 @@ describe('Painel do produtor', () => {
 
     const metricaPedidos = metrica('Pedidos');
     expect(metricaPedidos).toHaveTextContent('1');
+  });
+
+  it('conta o valor vendido assim que o recebimento e confirmado', async () => {
+    /*
+     * Bug relatado: confirmar o recebimento nao mexia em "Valor
+     * vendido", porque a metrica so olhava para itens ENTREGUE. Como o
+     * pagamento e na retirada, o produtor confirma o recebimento
+     * justamente no momento da entrega - a metrica ficava parada
+     * exatamente depois da acao que deveria fecha-la.
+     *
+     * O item continua PENDENTE de proposito: o valor tem de aparecer
+     * pelo recebimento, e nao porque alguem marcou "entregue" antes.
+     */
+    const cliente = await criarClienteLogado();
+    const produto = await criarProduto(produtor.token, {
+      nome: nomeUnico('Recebido'),
+      preco: 40,
+      estoque: 10,
+    });
+
+    await criarItemPendente({ clienteToken: cliente.token, produto });
+
+    const pedidoId = await pedidoDoProdutor(produtor.token);
+
+    await chamar(`/pedidos/${pedidoId}/pagamento/confirmar`, {
+      token: produtor.token,
+      metodo: 'PATCH',
+    });
+
+    renderizarComoTipo(produtor.token);
+    await screen.findByText(/Ola, Produtor Teste\./);
+
+    await waitFor(() => {
+      expect(metrica('Valor vendido')).toHaveTextContent('40,00');
+    });
+
+    // O item segue pendente: o valor veio do recebimento, nao da entrega.
+    const { dados: itens } = await chamar('/pedidos/agricultor', {
+      metodo: 'GET',
+      token: produtor.token,
+    });
+    expect(itens[0].status).toBe('PENDENTE');
+    expect(itens[0].pagamento_status).toBe('PAGO');
+  }, 15000);
+
+  it('nao conta item cancelado nem com pagamento recebido', async () => {
+    /*
+     * O outro lado da regra: cancelar um item depois de receber nao
+     * pode mante-lo como venda. O dinheiro ja recebido nao e devolvido
+     * pelo sistema (o acerto e presencial), mas a metrica mede venda,
+     * nao fluxo de caixa.
+     */
+    const cliente = await criarClienteLogado();
+    const produto = await criarProduto(produtor.token, {
+      nome: nomeUnico('Cancelado'),
+      preco: 60,
+      estoque: 10,
+    });
+
+    const itemId = await criarItemPendente({ clienteToken: cliente.token, produto });
+
+    const pedidoId = await pedidoDoProdutor(produtor.token);
+
+    await chamar(`/pedidos/${pedidoId}/pagamento/confirmar`, {
+      token: produtor.token,
+      metodo: 'PATCH',
+    });
+    await chamar(`/pedidos/${pedidoId}/itens/${itemId}`, {
+      token: produtor.token,
+      metodo: 'DELETE',
+    });
+
+    renderizarComoTipo(produtor.token);
+    await screen.findByText(/Ola, Produtor Teste\./);
+
+    await waitFor(() => {
+      expect(metrica('Valor vendido')).toHaveTextContent('R$ 0,00');
+    });
   });
 
   it('nao mostra itens de pedido de OUTRO produtor', async () => {
