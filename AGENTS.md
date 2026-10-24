@@ -100,7 +100,7 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 630 no backend (25 suítes) e 66 no frontend (12 suítes), todos passando.
+Suíte de testes: 630 no backend (25 suítes) e 68 no frontend (12 suítes), todos passando.
 
 **Produção.** `agrohero-api` no Render e `agrohero-web` no Vercel, servidos a partir deste repositório. A versão em produção é o merge do PR #2 (`13f7843`). O ponto de rollback é a tag `v1.0.0-producao` (`c2a97a3`) — mas, depois da migration `008`, voltar o código exige restaurar também o schema do Neon. A API pública é `agrohero.onrender.com` (não `agrohero-api.onrender.com`) e o frontend de produção é `agrohero-six.vercel.app` (é essa a origem que o CORS libera). Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
@@ -132,7 +132,7 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 ```bash
 cd backend && npm test                                  # recria o schema
 cd backend && node src/database/run-seeds.js            # devolve categorias
-cd frontend && npx vitest run                           # 66 testes
+cd frontend && npx vitest run                           # 68 testes
 ```
 O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 
@@ -263,6 +263,8 @@ Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (62/62 apos o rodape 
 ---
 
 ## Frontend (FASES 15 a 19)
+
+**"Valor vendido" no painel do produtor conta o que ja pode ser considerado venda, nao o que ja foi entregue.** A metrica olhava so para `status === 'ENTREGUE'`, mas o pagamento e feito na retirada: confirmar o recebimento e justamente o momento em que o dinheiro entra, e o item pode continuar PENDENTE (o produtor confirma sem ter passado por PROCESSANDO/ENVIADO). A regra correta e item ENTREGUE **ou** com `pagamento_status === 'PAGO'`, e item CANCELADO fica de fora mesmo com pagamento ja recebido - a metrica mede venda, nao fluxo de caixa. Cobrir os dois lados (incrementa ao confirmar; nao conta cancelado) evita que a proxima mudanca troque um pelo outro.
 
 **O `/health` fica FORA do versionamento, e o cliente `api.js` não o alcança.** A rota responde em `/health`, não em `/api/v1/health`, porque é infraestrutura (o health check do Render usa exatamente esse caminho). Como `VITE_API_URL` já inclui o prefixo `/api/v1`, chamar `/health` pelo cliente resultaria em `/api/v1/health` e 404. O status do rodapé (`services/saude.js`) deriva a raiz com `URL_BASE.replace(/\/api\/v\d+\/?$/, '')`. Antes de consumir qualquer endpoint de infraestrutura, conferir onde ele está montado em `app.js`.
 

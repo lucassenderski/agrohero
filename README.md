@@ -48,7 +48,7 @@ Desenvolvido em fases, cada uma testada antes de avançar. Fases **0 a 23 conclu
 | 23 | Deploy (publicado em Vercel + Render + Neon) | ✅ |
 | 24 | Testes em produção (acompanhamento contínuo) | contínuo |
 
-**Estado atual:** 48 rotas de API (65 operações), 22 rotas de interface, 12 tabelas de negócio, 10 migrations, **696 testes passando** (630 no backend, 66 no frontend).
+**Estado atual:** 48 rotas de API (65 operações), 22 rotas de interface, 12 tabelas de negócio, 10 migrations, **698 testes passando** (630 no backend, 68 no frontend).
 
 ---
 
@@ -182,7 +182,7 @@ São **três níveis**, cada um cobrindo o que o outro não alcança:
 | Integração | `backend/tests/integration/` | rotas de verdade contra PostgreSQL real | 574 |
 | Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 66 |
 
-Total: **696 testes** (25 suítes no backend, 12 no frontend).
+Total: **698 testes** (25 suítes no backend, 12 no frontend).
 
 O frontend não testa com mock porque o que ele precisa verificar é justamente o que um mock esconde: o formato do envelope, os nomes dos campos, os códigos de erro e as regras de autorização.
 
