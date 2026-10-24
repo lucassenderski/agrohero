@@ -100,7 +100,7 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 630 no backend (25 suítes) e 68 no frontend (12 suítes), todos passando.
+Suíte de testes: 633 no backend (25 suítes) e 71 no frontend (13 suítes), todos passando.
 
 **Produção.** `agrohero-api` no Render e `agrohero-web` no Vercel, servidos a partir deste repositório. A versão em produção é o merge do PR #2 (`13f7843`). O ponto de rollback é a tag `v1.0.0-producao` (`c2a97a3`) — mas, depois da migration `008`, voltar o código exige restaurar também o schema do Neon. A API pública é `agrohero.onrender.com` (não `agrohero-api.onrender.com`) e o frontend de produção é `agrohero-six.vercel.app` (é essa a origem que o CORS libera). Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
@@ -132,7 +132,7 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 ```bash
 cd backend && npm test                                  # recria o schema
 cd backend && node src/database/run-seeds.js            # devolve categorias
-cd frontend && npx vitest run                           # 68 testes
+cd frontend && npx vitest run                           # 71 testes
 ```
 O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 
@@ -321,6 +321,8 @@ Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (62/62 apos o rodape 
 **`unidade` é obrigatória na criação de produto.** Esquecer no corpo do teste dá 400 por validação, não 201. A lista de unidades é fechada (`unidade`, `kg`, `g`, `litro`, ...), então "quilo" também é recusado.
 
 **Escalação de privilégio já é barrada em duas camadas.** O enum `TIPOS_AUTOCADASTRO` rejeita `tipo: 'administrador'` com 400, e o service força o tipo a partir dessa lista caso o schema seja afrouxado. No PUT de perfil o campo `tipo` simplesmente não existe no schema, então o Zod o descarta — a requisição pode ser aceita, mas o papel no banco não muda. Há teste para os dois caminhos, e para `agricultor_id` no corpo da criação de produto (o dono vem sempre do token).
+
+**Dado privado que o dono precisa entregar vira snapshot do pedido, não consulta ao cadastro (FASE 25).** O produtor precisa do endereço e do telefone do comprador para entregar. O endereço já era snapshot (`endereco_entrega` JSONB), mas o telefone não existia em lugar nenhum — então entrou no snapshot, capturado de `usuario.telefone` no checkout. Duas razões para não fazer `JOIN usuarios` na leitura do agricultor: (1) é o contato combinado no momento da compra, e mudar o perfil depois não deve mudar o pedido; (2) a leitura do produtor continua sendo uma só consulta a `pedidos`, e não uma junção que precisaria repetir a regra de posse. O telefone é opcional no cadastro: o snapshot guarda `null` (a chave existe, o valor não), e a tela mostra "sem telefone cadastrado" em vez de sumir — o produtor precisa distinguir "o cliente não informou" de "a tela não mostrou". A exposição é limitada a quem tem item no pedido: a consulta do agricultor já filtra por `agricultor_id`, então um produtor de fora recebe 404 antes de ver qualquer contato.
 
 ---
 

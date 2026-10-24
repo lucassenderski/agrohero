@@ -59,6 +59,13 @@ export async function criarClienteLogado() {
       tipo: 'cliente',
       cidade: 'Campinas',
       estado: 'SP',
+      /*
+       * O telefone e o contato que o produtor usa na entrega. Cadastrado
+       * aqui para que o pedido criado no teste carregue um numero real no
+       * snapshot - sem isso o cenario do produtor sem contato seria o
+       * unico testavel.
+       */
+      telefone: '19999998888',
     },
   });
 

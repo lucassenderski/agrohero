@@ -120,7 +120,7 @@ Idempotentes: podem rodar em todo deploy. Criam as 7 categorias e o administrado
 
 **`carrinho_itens` não guarda preço.** O preço oficial é sempre lido de `produtos` no checkout. Se estivesse no carrinho, seria um campo manipulável pelo cliente.
 
-**O endereço do pedido é um snapshot em JSONB.** O cliente pode editar ou apagar um endereço depois; o pedido precisa continuar mostrando para onde foi enviado.
+**O endereço do pedido é um snapshot em JSONB.** O cliente pode editar ou apagar um endereço depois; o pedido precisa continuar mostrando para onde foi enviado. O snapshot inclui o **telefone do comprador** no momento da compra — é o contato que o produtor usa para entregar e para avisar quando não houver ninguém em casa. Fica no pedido, e não numa consulta ao cadastro, para que a leitura do agricultor continue sendo uma só consulta e o contato do pedido não mude se o cliente editar o perfil depois.
 
 **Índices parciais onde fazem diferença.** `produtos_disponiveis_idx` cobre só `ativo = TRUE`, que é o que as listagens públicas consultam. `enderecos_um_principal_por_consumidor` é um índice único parcial que garante no banco que cada consumidor tem no máximo um endereço principal — sem condição de corrida.
 

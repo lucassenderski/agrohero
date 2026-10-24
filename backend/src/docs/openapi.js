@@ -677,7 +677,25 @@ const schemas = {
       endereco_entrega: {
         type: 'object',
         description:
-          'Snapshot do endereco no momento da compra. Nao e uma referencia: o cliente pode editar ou apagar o endereco depois, e o pedido precisa continuar mostrando para onde foi enviado.',
+          'Snapshot do endereco no momento da compra. Nao e uma referencia: o cliente pode editar ou apagar o endereco depois, e o pedido precisa continuar mostrando para onde foi enviado. O telefone fica aqui (e nao em uma consulta ao cadastro) para que o produtor tenha o contato combinado na compra e a leitura continue sendo uma so consulta a `pedidos`.',
+        properties: {
+          endereco_id: { type: 'integer', example: 1 },
+          nome_destinatario: { type: 'string', example: 'Maria Souza' },
+          cep: { type: 'string', example: '13010100' },
+          rua: { type: 'string', example: 'Rua das Flores' },
+          numero: { type: 'string', example: '123' },
+          complemento: { type: 'string', nullable: true, example: null },
+          bairro: { type: 'string', example: 'Centro' },
+          cidade: { type: 'string', example: 'Campinas' },
+          estado: { type: 'string', example: 'SP' },
+          telefone: {
+            type: 'string',
+            nullable: true,
+            example: '19999998888',
+            description:
+              'Contato do comprador, so digitos. E opcional no cadastro: pode vir `null`, e o produtor ve "sem telefone cadastrado" na tela. Exposto apenas ao produtor com item no pedido - e o contato que ele usa para entregar.',
+          },
+        },
       },
       criado_em: { type: 'string', format: 'date-time' },
     },

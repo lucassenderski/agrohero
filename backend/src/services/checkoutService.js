@@ -145,8 +145,18 @@ function validarEMontarItens(itens) {
  * apagar o endereco depois, e o pedido de hoje precisa continuar
  * mostrando para onde o produto foi enviado. Um pedido e um documento
  * historico, nao uma view do cadastro atual.
+ *
+ * O TELEFONE entra aqui, e nao como JOIN em `usuarios` na leitura, pela
+ * mesma razao: e o contato combinado no momento da compra, e o produtor
+ * precisa dele na hora da entrega. O telefone fica no snapshot para que
+ * a consulta do agricultor continue sendo uma leitura so de `pedidos` -
+ * e para que apagar o telefone do perfil nao apague o do pedido ja feito.
+ *
+ * O telefone e opcional no cadastro. Quando ausente, a chave vai como
+ * `null` e a interface avisa o produtor - melhor do que o campo sumir e
+ * ele achar que a tela esta quebrada.
  */
-function montarSnapshotEndereco(endereco) {
+function montarSnapshotEndereco(endereco, telefone) {
   return {
     endereco_id: endereco.id,
     nome_destinatario: endereco.nome_destinatario,
@@ -157,6 +167,7 @@ function montarSnapshotEndereco(endereco) {
     bairro: endereco.bairro,
     cidade: endereco.cidade,
     estado: endereco.estado,
+    telefone: telefone ?? null,
   };
 }
 
@@ -208,7 +219,7 @@ async function montarResumo(usuario, enderecoId) {
       disponivel: item.ativo && item.estoque >= item.quantidade,
       estoque_disponivel: item.estoque,
     })),
-    endereco: montarSnapshotEndereco(endereco),
+    endereco: montarSnapshotEndereco(endereco, usuario.telefone),
     valor_produtos: valorProdutos,
     valor_frete: frete.valor,
     frete_gratis: frete.gratis,
@@ -476,7 +487,7 @@ export async function finalizar(usuario, { enderecoId, metodoPagamento }) {
       valorProdutos,
       valorFrete: frete.valor,
       valorTotal,
-      enderecoEntrega: montarSnapshotEndereco(endereco),
+      enderecoEntrega: montarSnapshotEndereco(endereco, usuario.telefone),
     });
 
     /* 6. Itens. */

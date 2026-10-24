@@ -96,7 +96,7 @@ cabecalho.
 
 São de integração: **nenhum `fetch` é mockado**, cada teste fala com a API real. Isso é deliberado — o que precisa ser verificado é justamente o que um mock esconderia: o formato do envelope, os nomes dos campos, os códigos de erro e as regras de autorização.
 
-São **68 testes em 12 arquivos**. Exigem um backend no ar, em modo `test` (nesse modo o rate limit fica desligado; sem isso, uma suíte com vários cadastros estoura o limite e falha por motivo errado):
+São **71 testes em 13 arquivos**. Exigem um backend no ar, em modo `test` (nesse modo o rate limit fica desligado; sem isso, uma suíte com vários cadastros estoura o limite e falha por motivo errado):
 
 ```bash
 # terminal 1 - API em modo de teste

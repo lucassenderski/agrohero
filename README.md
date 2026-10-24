@@ -48,7 +48,7 @@ Desenvolvido em fases, cada uma testada antes de avançar. Fases **0 a 23 conclu
 | 23 | Deploy (publicado em Vercel + Render + Neon) | ✅ |
 | 24 | Testes em produção (acompanhamento contínuo) | contínuo |
 
-**Estado atual:** 48 rotas de API (65 operações), 22 rotas de interface, 12 tabelas de negócio, 10 migrations, **698 testes passando** (630 no backend, 68 no frontend).
+**Estado atual:** 48 rotas de API (65 operações), 22 rotas de interface, 12 tabelas de negócio, 10 migrations, **704 testes passando** (633 no backend, 71 no frontend).
 
 ---
 
@@ -58,7 +58,7 @@ Desenvolvido em fases, cada uma testada antes de avançar. Fases **0 a 23 conclu
 Catálogo com busca, filtros (categoria, produtor, cidade, faixa de preço, disponibilidade) e ordenação; carrinho com revalidação de preço e estoque; múltiplos endereços com um principal; checkout transacional com cálculo de frete; histórico de pedidos; avaliação dos produtos já recebidos.
 
 ### Para o agricultor
-Cadastro de produtos com estoque e unidade; ativação/desativação (tirar do ar); reposição de estoque; logo da propriedade; painel com os pedidos que contêm itens seus; atualização do status **por item**; e confirmação do recebimento do pagamento na retirada.
+Cadastro de produtos com estoque e unidade; ativação/desativação (tirar do ar); reposição de estoque; logo da propriedade; painel com os pedidos que contêm itens seus, cada um com **endereço completo e telefone do comprador** para a entrega; atualização do status **por item**; e confirmação do recebimento do pagamento na retirada.
 
 ### Para o administrador
 Gestão de categorias (criar, editar, desativar, reativar) e acompanhamento dos pedidos, com avanço de status do pedido inteiro.
@@ -179,10 +179,10 @@ São **três níveis**, cada um cobrindo o que o outro não alcança:
 | Nível | Onde | O que verifica | Quantidade |
 |---|---|---|---|
 | Unidade | `backend/tests/unit/` | funções puras: tradução de erro do PostgreSQL, autorização por papel, escape de busca, guarda de produção, e-mail | 56 |
-| Integração | `backend/tests/integration/` | rotas de verdade contra PostgreSQL real | 574 |
-| Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 66 |
+| Integração | `backend/tests/integration/` | rotas de verdade contra PostgreSQL real | 577 |
+| Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 71 |
 
-Total: **698 testes** (25 suítes no backend, 12 no frontend).
+Total: **704 testes** (25 suítes no backend, 13 no frontend).
 
 O frontend não testa com mock porque o que ele precisa verificar é justamente o que um mock esconde: o formato do envelope, os nomes dos campos, os códigos de erro e as regras de autorização.
 
@@ -484,7 +484,7 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 | Método | Rota | Acesso | Descrição |
 |---|---|---|---|
 | GET | `/api/v1/pedidos` | 👤 | Pedidos do consumidor, com itens |
-| GET | `/api/v1/pedidos/agricultor` | 🧑‍🌾 | Itens do produtor (só os dele) |
+| GET | `/api/v1/pedidos/agricultor` | 🧑‍🌾 | Itens do produtor (só os dele), com endereço e telefone do comprador para a entrega |
 | GET | `/api/v1/pedidos/:id` | 🔐 | Detalhe — visão por tipo de usuário |
 | PATCH | `/api/v1/pedidos/:id/cancelar` | 👤 | Cancelar pedido (devolve estoque) |
 | PATCH | `/api/v1/pedidos/:id/itens/:itemId/status` | 🧑‍🌾 | Avançar status do próprio item |
