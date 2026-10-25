@@ -649,7 +649,7 @@ Problemas que consumiram tempo e cuja causa não era visível na primeira leitur
 
 ### API
 
-**A melhor defesa é não ter o campo.** No carrinho, `carrinho_itens` não tem coluna de preço e o schema não declara `preco`; o valor só pode sair de `produtos`. No checkout, o corpo aceita apenas `endereco_id` e `metodo_pagamento` — não há `valor_total` nem `preco`. Manipular preço deixa de ser um caso a tratar e vira impossibilidade do modelo. Ao receber dado do cliente, a pergunta útil é "como este dado poderia nem existir?" antes de "como validar este dado?".
+**A melhor defesa é não ter o campo.** No carrinho, `carrinho_itens` não tem coluna de preço e o schema não declara `preco`; o valor só pode sair de `produtos`. No checkout, o corpo aceita apenas `endereco_id`, `metodo_pagamento` e `telefone_contato` — não há `valor_total` nem `preco`. Manipular preço deixa de ser um caso a tratar e vira impossibilidade do modelo. Ao receber dado do cliente, a pergunta útil é "como este dado poderia nem existir?" antes de "como validar este dado?".
 
 **O proprietário vem sempre do token, e recurso alheio responde 404.** A checagem de posse fica na cláusula `WHERE`, não numa verificação separada no service — assim não existe caminho de código onde ela possa ser esquecida. E o código é 404, não 403: um 403 confirma que o recurso existe e permite enumerar ids.
 

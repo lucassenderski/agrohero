@@ -7,6 +7,7 @@ import {
   finalizarCheckout,
 } from '../services/compras.js';
 import { useCarrinho } from '../contexts/CarrinhoContext.jsx';
+import { useAuth } from '../contexts/AuthContext.jsx';
 import { useNotificacao } from '../contexts/NotificacaoContext.jsx';
 import { useFormulario } from '../hooks/useMutacao.js';
 import { Carregando, MensagemErro, EstadoVazio, Modal } from '../components/ui.jsx';
@@ -50,12 +51,14 @@ const ENDERECO_VAZIO = { ...ENDERECO_VAZIO_BASE };
  */
 export default function Checkout() {
   const { carrinho, recarregar } = useCarrinho();
+  const { usuario } = useAuth();
   const { sucesso, erro: notificarErro } = useNotificacao();
   const navegar = useNavigate();
 
   const [enderecos, setEnderecos] = useState([]);
   const [enderecoId, setEnderecoId] = useState(null);
   const [metodo, setMetodo] = useState('PIX');
+  const [telefone, setTelefone] = useState('');
   const [previa, setPrevia] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
@@ -64,6 +67,17 @@ export default function Checkout() {
   const [modalEndereco, setModalEndereco] = useState(false);
 
   const { valores, alterar, reiniciar } = useFormulario(ENDERECO_VAZIO);
+
+  /*
+   * Pre-preenche o contato com o telefone do perfil.
+   *
+   * O campo continua editavel: o cliente pode estar comprando para outra
+   * pessoa, ou ter trocado de numero. Mas quem ja tem telefone cadastrado
+   * nao precisa digitar de novo para concluir a compra.
+   */
+  useEffect(() => {
+    if (usuario?.telefone) setTelefone(usuario.telefone);
+  }, [usuario?.telefone]);
 
   /* Carrega enderecos e escolhe o principal. */
   useEffect(() => {
@@ -144,9 +158,22 @@ export default function Checkout() {
       return;
     }
 
+    /*
+     * O contato e obrigatorio para concluir: sem telefone o produtor nao
+     * consegue avisar sobre a entrega. O backend aceita o campo ausente
+     * (cai no telefone do perfil), mas a tela so libera o botao com um
+     * numero valido - e aqui conferimos de novo, porque o campo pode ser
+     * apagado depois de habilitar.
+     */
+    const digitos = String(telefone || '').replace(/\D/g, '');
+    if (digitos.length !== 10 && digitos.length !== 11) {
+      notificarErro('Informe um telefone de contato com DDD (10 ou 11 digitos).');
+      return;
+    }
+
     setFinalizando(true);
     try {
-      const resultado = await finalizarCheckout(enderecoId, metodo);
+      const resultado = await finalizarCheckout(enderecoId, metodo, digitos);
 
       /*
        * Nao ha pagamento a aprovar: o pedido e criado e sera pago na
@@ -189,6 +216,14 @@ export default function Checkout() {
 
   const itens = previa?.itens || carrinho.itens || [];
   const bloqueado = (previa?.itens || []).some((item) => item.disponivel === false);
+
+  /*
+   * O contato precisa de 10 ou 11 digitos para o pedido ser finalizado.
+   * E o mesmo criterio do backend, aplicado aqui para o botao refletir o
+   * que o servidor aceitaria - sem ida e volta de erro.
+   */
+  const digitosContato = String(telefone || '').replace(/\D/g, '');
+  const contatoValido = digitosContato.length === 10 || digitosContato.length === 11;
 
   return (
     <div className="container carrinho">
@@ -242,6 +277,30 @@ export default function Checkout() {
                 ))}
               </div>
             )}
+
+            {/*
+             * Contato para a entrega. O produtor usa este numero para
+             * combinar a entrega ou avisar quando nao houver ninguem em
+             * casa - por isso ele e pedido no checkout, e nao deixado so
+             * no perfil. Vem preenchido do cadastro quando existe.
+             */}
+            <div className="campo">
+              <label className="campo__rotulo" htmlFor="checkout-telefone">
+                Telefone de contato <span className="campo__obrigatorio">*</span>
+              </label>
+              <input
+                id="checkout-telefone"
+                className="campo__entrada"
+                placeholder="(19) 99999-8888"
+                inputMode="tel"
+                value={telefone}
+                onChange={(evento) => setTelefone(evento.target.value)}
+              />
+              <p className="campo__dica">
+                O produtor usa este numero para combinar a entrega ou avisar quando nao houver
+                ninguem no local.
+              </p>
+            </div>
           </section>
 
           <section className="painel-secao">
@@ -351,7 +410,7 @@ export default function Checkout() {
           <button
             type="button"
             className="botao botao--primario botao--bloco"
-            disabled={finalizando || calculando || bloqueado || !enderecoId}
+            disabled={finalizando || calculando || bloqueado || !enderecoId || !contatoValido}
             onClick={confirmar}
           >
             {finalizando ? 'Confirmando pedido...' : 'Confirmar pedido'}

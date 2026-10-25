@@ -19,7 +19,8 @@ import logger from '../config/logger.js';
  * 1) O SERVIDOR RECALCULA TUDO. Nenhum valor vem do cliente. O preco
  *    sai de `produtos.preco`, o frete da regra do freteService e os
  *    totais de uma soma feita aqui. O corpo da requisicao carrega
- *    apenas `endereco_id` e `metodo_pagamento` - nenhum numero.
+ *    apenas `endereco_id`, `metodo_pagamento` e `telefone_contato` -
+ *    nenhum numero de valor.
  *
  * 2) O ESTOQUE E RESERVADO NO BANCO, DE FORMA CONDICIONAL. A baixa usa
  *    `UPDATE ... WHERE estoque >= $2`. Quem decide se ha estoque e o
@@ -172,6 +173,21 @@ function montarSnapshotEndereco(endereco, telefone) {
 }
 
 /*
+ * Decide o telefone que vai para o snapshot.
+ *
+ * O numero CONFIRMADO no checkout vence o do cadastro: o cliente pode
+ * estar comprando para outra pessoa, ou ter trocado de numero e nao
+ * atualizado o perfil. Sem telefone no corpo, cai no do perfil - assim
+ * quem ja tem contato cadastrado nao precisa digitar de novo.
+ *
+ * Sem os dois, fica `null`: o produtor ve "sem telefone cadastrado" e
+ * sabe que o cliente nao informou, em vez de achar que a tela quebrou.
+ */
+function resolverTelefoneContato(usuario, telefoneContato) {
+  return telefoneContato ?? usuario.telefone ?? null;
+}
+
+/*
  * PREVIA DO CHECKOUT - calcula tudo sem gravar nada.
  *
  * Existe para o frontend mostrar "Produtos: R$ X / Frete: R$ Y /
@@ -219,7 +235,7 @@ async function montarResumo(usuario, enderecoId) {
       disponivel: item.ativo && item.estoque >= item.quantidade,
       estoque_disponivel: item.estoque,
     })),
-    endereco: montarSnapshotEndereco(endereco, usuario.telefone),
+    endereco: montarSnapshotEndereco(endereco, resolverTelefoneContato(usuario)),
     valor_produtos: valorProdutos,
     valor_frete: frete.valor,
     frete_gratis: frete.gratis,
@@ -452,7 +468,7 @@ async function notificarPedidoCriado(usuario, pedido, pagamentos) {
  * transacao e o checkout fica com uma garantia a mais - ou tudo existe,
  * ou nada existe.
  */
-export async function finalizar(usuario, { enderecoId, metodoPagamento }) {
+export async function finalizar(usuario, { enderecoId, metodoPagamento, telefoneContato }) {
   const resultado = await pedidoRepository.emTransacao(async (cliente) => {
     /* 1. Carrinho do consumidor (criado se nao existir). */
     const carrinho = await carrinhoRepository.obterOuCriar(usuario.id);
@@ -487,7 +503,10 @@ export async function finalizar(usuario, { enderecoId, metodoPagamento }) {
       valorProdutos,
       valorFrete: frete.valor,
       valorTotal,
-      enderecoEntrega: montarSnapshotEndereco(endereco, usuario.telefone),
+      enderecoEntrega: montarSnapshotEndereco(
+        endereco,
+        resolverTelefoneContato(usuario, telefoneContato),
+      ),
     });
 
     /* 6. Itens. */

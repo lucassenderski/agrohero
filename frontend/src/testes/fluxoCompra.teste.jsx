@@ -285,4 +285,72 @@ describe('Fluxo de compra', () => {
     expect(screen.getByText(/ainda nao tem endereco cadastrado/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /confirmar pedido/i })).toBeDisabled();
   });
+
+  /*
+   * O contato para a entrega e pedido no checkout, e nao deixado so no
+   * perfil: e o numero que o produtor usa para combinar a entrega.
+   *
+   * O cliente do helper ja tem telefone no cadastro, entao o campo vem
+   * preenchido. Aqui trocamos o numero e confirmamos que o VALOR INFORMADO
+   * e o que vai para o snapshot do pedido - nao o do perfil.
+   */
+  it('envia o telefone de contato informado no checkout', async () => {
+    await criarEnderecoDoUsuario(cliente.token);
+
+    await chamar('/carrinho/itens', {
+      token: cliente.token,
+      corpo: { produto_id: produto.id, quantidade: 1 },
+    });
+
+    const usuario = userEvent.setup();
+    renderizar('/checkout');
+
+    await screen.findByText(/Pagamento na retirada/i);
+
+    const campoContato = screen.getByLabelText(/Telefone de contato/i);
+
+    // Vem preenchido com o telefone do perfil.
+    expect(campoContato).toHaveValue('19999998888');
+
+    await usuario.clear(campoContato);
+    await usuario.type(campoContato, '11977776666');
+
+    const confirmar = screen.getByRole('button', { name: /confirmar pedido/i });
+    await waitFor(() => expect(confirmar).toBeEnabled());
+    await usuario.click(confirmar);
+
+    await waitFor(
+      async () => {
+        const { dados } = await chamar('/pedidos', { metodo: 'GET', token: cliente.token });
+        expect(dados).toHaveLength(1);
+        expect(dados[0].endereco_entrega.telefone).toBe('11977776666');
+      },
+      { timeout: 8000 },
+    );
+  });
+
+  /*
+   * Sem telefone de contato nao ha como o produtor avisar sobre a
+   * entrega, entao a tela bloqueia a finalizacao. O backend aceitaria o
+   * campo ausente (cai no perfil), mas o cliente precisa confirmar o
+   * numero - por isso o botao fica desabilitado enquanto o campo nao tem
+   * um telefone valido.
+   */
+  it('nao deixa finalizar sem telefone de contato', async () => {
+    await criarEnderecoDoUsuario(cliente.token);
+
+    await chamar('/carrinho/itens', {
+      token: cliente.token,
+      corpo: { produto_id: produto.id, quantidade: 1 },
+    });
+
+    const usuario = userEvent.setup();
+    renderizar('/checkout');
+
+    await screen.findByText(/Pagamento na retirada/i);
+
+    await usuario.clear(screen.getByLabelText(/Telefone de contato/i));
+
+    expect(screen.getByRole('button', { name: /confirmar pedido/i })).toBeDisabled();
+  });
 });

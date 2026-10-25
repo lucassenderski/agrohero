@@ -72,10 +72,19 @@ export async function previaCheckout(enderecoId) {
   return resposta.dados;
 }
 
-export async function finalizarCheckout(enderecoId, metodoPagamento) {
+/*
+ * Finaliza a compra.
+ *
+ * `telefone_contato` e o numero que o cliente confirmou para esta
+ * entrega. Vai como `undefined` quando vazio: o schema do servidor
+ * recusa string vazia (o campo ou esta ausente, ou e um numero valido),
+ * e nesse caso o backend cai no telefone do perfil.
+ */
+export async function finalizarCheckout(enderecoId, metodoPagamento, telefoneContato) {
   const resposta = await api.post('/checkout', {
     endereco_id: enderecoId,
     metodo_pagamento: metodoPagamento,
+    telefone_contato: telefoneContato || undefined,
   });
   return resposta.dados;
 }

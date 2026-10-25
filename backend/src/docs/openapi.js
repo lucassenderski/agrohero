@@ -583,6 +583,13 @@ const schemas = {
     properties: {
       endereco_id: { type: 'integer', example: 1 },
       metodo_pagamento: { type: 'string', enum: ['PIX', 'CARTAO', 'DINHEIRO'], example: 'PIX' },
+      telefone_contato: {
+        type: 'string',
+        nullable: true,
+        example: '19999998888',
+        description:
+          'Contato para a entrega, apenas digitos (10 ou 11, com DDD). Opcional: quando ausente, o checkout usa o telefone do perfil. Quando presente, VENCE o do perfil - e o numero confirmado para esta compra. Vai para o snapshot `endereco_entrega` e e o contato que o produtor usa para combinar a entrega.',
+      },
     },
   },
 
