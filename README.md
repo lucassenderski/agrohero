@@ -631,6 +631,50 @@ O painel do provedor mostra o deploy **disparado**, não necessariamente o que e
 
 ---
 
+## Dificuldades encontradas
+
+Problemas que consumiram tempo e cuja causa não era visível na primeira leitura do código. A maioria só apareceu com o sistema rodando — o teste local passava e o comportamento real era outro. Ficam registrados porque voltam a acontecer.
+
+### Modelagem e banco
+
+**Campo que o schema não declara é descartado em silêncio.** O schema do perfil do agricultor não declarava `cidade` nem `estado`, então o perfil era gravado sem localização — sem erro, sem aviso. O Zod remove o campo não declarado, e o sintoma só aparece depois, na listagem. O teste que "cobria" o caso passava por motivo errado: o payload duplicava `cidade` no nível de cima e o fallback do service mascarava a perda. A correção foi declarar os campos e reescrever o teste até ele falhar sem a correção.
+
+**`count(*)` sem alias faz a paginação mentir.** O helper `contar()` lê `linha.total`; sem `AS total`, a coluna se chama `count`, `linha.total` é `undefined` e o total vira **0 sempre** — enquanto a lista de itens volta correta. A primeira página mostra tudo e parece certa; só o campo `paginacao.total` está errado. Passou despercebido porque nenhum teste olhava esse campo.
+
+**Tipo de retorno do banco é decisão do projeto, não detalhe.** O `pool.js` registra um parser que converte `NUMERIC` em `Number`, mas `BIGINT` chega como string. `expect(preco).toBe('4.50')` falha porque o valor é `4.5`; `expect(id).toBe(1)` falha porque chega `"1"`. Antes de escrever a asserção, confira o tipo da coluna.
+
+**Migration que troca constraint não roda sobre dados do vocabulário antigo.** A `008` restringe `pagamentos.metodo` a `PIX`/`CARTAO`/`DINHEIRO`. O `ADD CONSTRAINT` valida as linhas existentes: qualquer `BOLETO` que tenha sobrado de um teste em produção faz a migration falhar e o deploy abortar. Como roda em transação própria, nada fica pela metade — mas é preciso normalizar os dados na origem antes de publicar.
+
+**`CREATE OR REPLACE VIEW` não muda o tipo de uma coluna.** Quando o tipo muda, o PostgreSQL recusa com `cannot change data type of view column`; a migration precisa de `DROP VIEW` antes do `CREATE`.
+
+### API
+
+**A melhor defesa é não ter o campo.** No carrinho, `carrinho_itens` não tem coluna de preço e o schema não declara `preco`; o valor só pode sair de `produtos`. No checkout, o corpo aceita apenas `endereco_id` e `metodo_pagamento` — não há `valor_total` nem `preco`. Manipular preço deixa de ser um caso a tratar e vira impossibilidade do modelo. Ao receber dado do cliente, a pergunta útil é "como este dado poderia nem existir?" antes de "como validar este dado?".
+
+**O proprietário vem sempre do token, e recurso alheio responde 404.** A checagem de posse fica na cláusula `WHERE`, não numa verificação separada no service — assim não existe caminho de código onde ela possa ser esquecida. E o código é 404, não 403: um 403 confirma que o recurso existe e permite enumerar ids.
+
+**Ordem de rotas com caminho literal e `/:id` é armadilha silenciosa.** `GET /produtos/meus` precisa ser declarada antes de `GET /produtos/:id`; senão "meus" é lido como id, falha na validação de inteiro e devolve 400 — um erro que parece bug de validação quando é ordem de declaração.
+
+**Dado privado que o dono precisa entregar vira snapshot do pedido.** O produtor precisa do endereço e do telefone do comprador para entregar. Ambos entram no snapshot `endereco_entrega` no checkout, e não numa consulta ao cadastro: é o contato combinado no momento da compra, e editar o perfil depois não deve reescrever o pedido. O telefone é opcional — o snapshot guarda `null` e a tela avisa "sem telefone cadastrado", para o produtor distinguir "o cliente não informou" de "a tela não mostrou".
+
+### Frontend
+
+**Rota de imagem autenticada não pode ser o `src` de um `<img>`.** O navegador não envia cabeçalhos customizados ao buscar a imagem, então `<img src="/api/v1/usuarios/avatar">` produz 401 e ícone quebrado. O caminho correto é buscar os bytes com `fetch` + token e montar um `URL.createObjectURL`. Token na query string e rota pública por id foram descartados: vazam credencial e expõem a foto alheia.
+
+**`ErroApi` precisa expor `.mensagem`, não só `.message`.** Toda a interface lê `falha.mensagem`, o mesmo nome do campo no envelope de erro da API. Como a classe guardava o texto só em `.message`, nenhum motivo real chegava ao usuário — `ULTIMO_ENDERECO`, `ENDERECO_PRINCIPAL` e `ESTOQUE_INSUFICIENTE` caíam todos no texto genérico. Desconfie de qualquer erro que mostra sempre a mesma mensagem.
+
+**Teste de página protegida usa o guard do `App`.** Renderizar a página solta, sem o `<RotaPorTipo>`, faz o `fetch` da página terminar antes de o `AuthContext` carregar o perfil e o componente ler de um `usuario` nulo. Em produção a página vive sob o guard, então não é bug de produção — é o teste violando a convenção.
+
+**`getBy*` só quando o elemento já está no DOM.** Com `findBy*` onde o conteúdo é síncrono, a espera dá tempo de a API responder e substituir o que se procurava; com `getBy*` onde o conteúdo chega depois, o teste roda no intervalo em que a lista está vazia. Cada um dos dois produziu uma falha intermitente que sumia quando o arquivo rodava sozinho.
+
+**O `jsdom` não implementa `URL.createObjectURL`, e o `fetch` dele não envia `FormData` como multipart.** Ele manda a string `"[object FormData]"` e o servidor responde "nenhum arquivo foi enviado". Os testes de upload trocam `fetch`/`FormData` pelo `undici` e `File` pelo `node:buffer`, e adicionam um polyfill — troca restrita a esse arquivo, porque os testes rodam em paralelo e mexer no `fetch` global faz os outros falharem.
+
+### Deploy
+
+As dificuldades de publicação — variáveis `sync: false` que guardaram o valor de exemplo, o painel que mostra o deploy disparado e não o que está no ar, e o plano gratuito sem `preDeployCommand`/Shell — estão na seção [Deploy](#deploy) e no passo a passo de `docs/DEPLOY.md`.
+
+---
+
 ## Licença
 
 Projeto acadêmico.
