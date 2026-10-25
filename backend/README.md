@@ -132,7 +132,7 @@ Idempotentes: podem rodar em todo deploy. Criam as 7 categorias e o administrado
 npm test
 ```
 
-A suíte tem 630 testes em 25 arquivos, incluindo os negativos: preço negativo, estoque negativo, total incoerente, subtotal manipulado, nota fora de 1–5, IDOR entre produtores e CEP inválido. São 56 de unidade (`tests/unit/`) e 574 de integração (`tests/integration/`).
+A suíte tem 638 testes em 25 arquivos, incluindo os negativos: preço negativo, estoque negativo, total incoerente, subtotal manipulado, nota fora de 1–5, IDOR entre produtores e CEP inválido. São 56 de unidade (`tests/unit/`) e 582 de integração (`tests/integration/`).
 
 Os testes recriam o schema do zero a cada execução no banco `agrohero_test`, então não dependem de migrations aplicadas previamente. Não há mock de banco: o objetivo é validar o comportamento real.
 
@@ -198,7 +198,7 @@ backend/
 | 23 | Deploy (publicado em Vercel + Render + Neon) | ✅ concluída |
 | 24 | Testes em produção | contínuo |
 
-Suíte de testes: **630 testes em 25 suítes** (56 de unidade e 574 de integração), todos passando (`npm test`).
+Suíte de testes: **638 testes em 25 suítes** (56 de unidade e 582 de integração), todos passando (`npm test`).
 
 ## Regras de negócio
 

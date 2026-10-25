@@ -100,7 +100,7 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 633 no backend (25 suítes) e 71 no frontend (13 suítes), todos passando.
+Suíte de testes: 638 no backend (25 suítes) e 73 no frontend (13 suítes), todos passando.
 
 **Produção.** `agrohero-api` no Render e `agrohero-web` no Vercel, servidos a partir deste repositório. A versão em produção é o merge do PR #2 (`13f7843`). O ponto de rollback é a tag `v1.0.0-producao` (`c2a97a3`) — mas, depois da migration `008`, voltar o código exige restaurar também o schema do Neon. A API pública é `agrohero.onrender.com` (não `agrohero-api.onrender.com`) e o frontend de produção é `agrohero-six.vercel.app` (é essa a origem que o CORS libera). Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
@@ -132,7 +132,7 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 ```bash
 cd backend && npm test                                  # recria o schema
 cd backend && node src/database/run-seeds.js            # devolve categorias
-cd frontend && npx vitest run                           # 71 testes
+cd frontend && npx vitest run                           # 73 testes
 ```
 O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 
@@ -218,7 +218,7 @@ Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (62/62 apos o rodape 
 
 **BIGINT do pg chega como string; NUMERIC chega como Number (parser do projeto).** Teste do carrinho falhou esperando `1` e recebendo `"1"` em `produto_id`. Antes de assertar, conferir o tipo da coluna: id e BIGINT (string), preco e NUMERIC (Number, por causa do parser em `pool.js`).
 
-**Preco do cliente nao existe no schema; no checkout isso vale para o pedido inteiro.** O corpo do `POST /checkout` aceita so `endereco_id` e `metodo_pagamento`. Nao ha `valor_total`, `valor_frete` nem `preco`. Se houvesse, o cliente mandaria 0.01 e a API gravaria o pedido por 0.01. A defesa e a ausencia do campo, nao a validacao dele.
+**Preco do cliente nao existe no schema; no checkout isso vale para o pedido inteiro.** O corpo do `POST /checkout` aceita so `endereco_id`, `metodo_pagamento` e `telefone_contato`. Nao ha `valor_total`, `valor_frete` nem `preco`. Se houvesse, o cliente mandaria 0.01 e a API gravaria o pedido por 0.01. A defesa e a ausencia do campo, nao a validacao dele. O `telefone_contato` nao fere isso: e contato, nao valor - o preco continua vindo so de `produtos.preco`.
 
 **Adicionar ao carrinho valida estoque; isso muda como se escreve teste de checkout.** Varios testes falharam por baixar o estoque ANTES de montar o carrinho - a propria adicao recusava. O cenario que se quer testar e "o carrinho foi montado quando havia estoque, e o estoque caiu depois". Ordem: encher o carrinho, depois ajustar o estoque por SQL.
 
@@ -328,7 +328,7 @@ Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (62/62 apos o rodape 
 
 ## Testes completos (FASE 21)
 
-**`jest --coverage` derruba a suíte se o banco não estiver no ar.** O relatório de cobertura roda todo mundo; sem o PostgreSQL, as 16 suítes de integração falham com `ECONNREFUSED` e o resumo mostra "509 failed" — um número que parece problema de código e é só o container parado. Checar `docker compose ps` antes de interpretar qualquer falha em massa.
+**`jest --coverage` derruba a suíte se o banco não estiver no ar.** O relatório de cobertura roda todo mundo; sem o PostgreSQL, as 19 suítes de integração falham com `ECONNREFUSED` e o resumo mostra um número de falhas que parece problema de código e é só o container parado. Checar `docker compose ps` antes de interpretar qualquer falha em massa.
 
 **O daemon do Docker não sobe sozinho no ambiente.** `docker ps` responde `dial unix /var/run/docker.sock: no such file or directory`. A correção é `sudo dockerd > /tmp/docker.log 2>&1 &` e depois `sudo docker ...` (sem `sudo`, o socket recém-criado ainda dá permissão negada).
 
