@@ -48,7 +48,7 @@ Desenvolvido em fases, cada uma testada antes de avançar. Fases **0 a 23 conclu
 | 23 | Deploy (publicado em Vercel + Render + Neon) | ✅ |
 | 24 | Testes em produção (acompanhamento contínuo) | contínuo |
 
-**Estado atual:** 48 rotas de API (65 operações), 22 rotas de interface, 12 tabelas de negócio, 10 migrations, **711 testes passando** (638 no backend, 73 no frontend).
+**Estado atual:** 49 rotas de API (66 operações), 22 rotas de interface, 12 tabelas de negócio, 10 migrations, **726 testes passando** (648 no backend, 78 no frontend).
 
 ---
 
@@ -179,10 +179,10 @@ São **três níveis**, cada um cobrindo o que o outro não alcança:
 | Nível | Onde | O que verifica | Quantidade |
 |---|---|---|---|
 | Unidade | `backend/tests/unit/` | funções puras: tradução de erro do PostgreSQL, autorização por papel, escape de busca, guarda de produção, e-mail | 56 |
-| Integração | `backend/tests/integration/` | rotas de verdade contra PostgreSQL real | 582 |
-| Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 71 |
+| Integração | `backend/tests/integration/` | rotas de verdade contra PostgreSQL real | 592 |
+| Integração | `frontend/src/testes/` | telas de verdade contra a API real (sem mock de `fetch`) | 78 |
 
-Total: **711 testes** (25 suítes no backend, 13 no frontend).
+Total: **726 testes** (26 suítes no backend, 14 no frontend).
 
 O frontend não testa com mock porque o que ele precisa verificar é justamente o que um mock esconde: o formato do envelope, os nomes dos campos, os códigos de erro e as regras de autorização.
 
@@ -485,6 +485,7 @@ Legenda: 🔓 público · 🔐 autenticado · 👤 cliente · 🧑‍🌾 agricu
 |---|---|---|---|
 | GET | `/api/v1/pedidos` | 👤 | Pedidos do consumidor, com itens |
 | GET | `/api/v1/pedidos/agricultor` | 🧑‍🌾 | Itens do produtor (só os dele), com endereço e telefone do comprador para a entrega |
+| GET | `/api/v1/pedidos/agricultor/novos` | 🧑‍🌾 | Itens novos (PENDENTE) — alimenta o contador e o popup do produtor |
 | GET | `/api/v1/pedidos/:id` | 🔐 | Detalhe — visão por tipo de usuário |
 | PATCH | `/api/v1/pedidos/:id/cancelar` | 👤 | Cancelar pedido (devolve estoque) |
 | PATCH | `/api/v1/pedidos/:id/itens/:itemId/status` | 🧑‍🌾 | Avançar status do próprio item |

@@ -30,6 +30,18 @@ export async function listarItensDoProdutor(filtros = {}) {
 }
 
 /*
+ * Itens novos (ainda PENDENTE) do produtor, para o aviso do cabecalho.
+ *
+ * Devolve `{ total, itens }`: o total e o numero do contador, e a lista
+ * traz apenas os primeiros, para o popup. A tela completa continua sendo
+ * a de pedidos recebidos.
+ */
+export async function listarItensNovosDoProdutor() {
+  const resposta = await api.get('/pedidos/agricultor/novos');
+  return resposta.dados;
+}
+
+/*
  * Avanca o status de UM item. O produtor so consegue alterar itens que
  * sao dele: o backend confere a propriedade e devolve 404 caso contrario.
  */

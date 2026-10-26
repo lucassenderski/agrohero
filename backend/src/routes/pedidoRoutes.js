@@ -59,6 +59,20 @@ router.get(
   pedidoController.listar,
 );
 
+/*
+ * GET /api/v1/pedidos/agricultor/novos - itens novos (PENDENTE).
+ *
+ * Alimenta o contador do cabecalho e o popup. Vem logo depois de
+ * `/agricultor` e ANTES das rotas com `/:id`: `/agricultor/novos` tem
+ * dois segmentos, entao nao colidiria com `/:id`, mas manter as rotas
+ * literais juntas preserva a leitura que este arquivo documenta.
+ */
+router.get(
+  '/agricultor/novos',
+  requireRole('agricultor'),
+  pedidoController.listarNovos,
+);
+
 /* PATCH /api/v1/pedidos/:id/itens/:itemId/status - avanca um item. */
 router.patch(
   '/:id/itens/:itemId/status',

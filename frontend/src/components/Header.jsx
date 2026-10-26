@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCarrinho } from '../contexts/CarrinhoContext.jsx';
+import { usePedidosNovos } from '../contexts/PedidosNovosContext.jsx';
 import Avatar from './Avatar.jsx';
 import './Header.css';
 
@@ -22,6 +23,7 @@ export default function Header() {
   const { usuario, autenticado, ehCliente, ehAgricultor, ehAdmin, sair, avatarUrl } =
     useAuth();
   const { quantidade } = useCarrinho();
+  const { total: totalPedidosNovos } = usePedidosNovos();
   const navegar = useNavigate();
   const [menuAberto, setMenuAberto] = useState(false);
 
@@ -105,8 +107,20 @@ export default function Header() {
               <Link to="/agricultor/produtos" className="header__link" onClick={fecharMenu}>
                 Meus produtos
               </Link>
-              <Link to="/agricultor/pedidos" className="header__link" onClick={fecharMenu}>
+              <Link
+                to="/agricultor/pedidos"
+                className="header__link header__link--pedidos"
+                onClick={fecharMenu}
+              >
                 Pedidos
+                {totalPedidosNovos > 0 && (
+                  <span
+                    className="header__contador"
+                    aria-label={`${totalPedidosNovos} pedidos novos`}
+                  >
+                    {totalPedidosNovos}
+                  </span>
+                )}
               </Link>
             </>
           )}

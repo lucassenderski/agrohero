@@ -737,6 +737,31 @@ const schemas = {
     },
   },
 
+  /*
+   * Item do aviso de pedidos novos. E um recorte do ItemPedido: o popup
+   * precisa apenas do que identifica o pedido e ajuda o produtor a
+   * decidir se abre o painel agora. O endereco completo fica na tela de
+   * pedidos - um popup nao precisa do dado pessoal inteiro.
+   */
+  ItemPedidoNovo: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      pedido_id: { type: 'integer', example: 1 },
+      produto_nome: { type: 'string', example: 'Tomate' },
+      quantidade: { type: 'integer', example: 2 },
+      unidade: { type: 'string', example: 'kg' },
+      subtotal: { type: 'number', example: 17 },
+      comprador_cidade: {
+        type: 'string',
+        example: 'Campinas',
+        description: 'Cidade do snapshot `endereco_entrega`. Nulo se o endereco nao a tiver.',
+      },
+      comprador_estado: { type: 'string', example: 'SP' },
+      criado_em: { type: 'string', format: 'date-time' },
+    },
+  },
+
   PedidoDetalhado: {
     allOf: [
       { $ref: '#/components/schemas/Pedido' },
@@ -2910,6 +2935,53 @@ export const openapi = {
                   properties: {
                     sucesso: { type: 'boolean', example: true },
                     dados: { type: 'array', items: { $ref: '#/components/schemas/ItemPedido' } },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+
+    /*
+     * Rota do aviso de pedidos novos do produtor. Vem antes de
+     * `/pedidos/{id}` para preservar a leitura de que as rotas literais
+     * de `/agricultor` ficam juntas, como no arquivo de rotas.
+     */
+    '/api/v1/pedidos/agricultor/novos': {
+      get: {
+        tags: ['Pedidos'],
+        summary: 'Itens novos (PENDENTE) do agricultor autenticado',
+        description:
+          'Alimenta o contador e o popup do produtor. "Novo" e o item em PENDENTE, o status com que ele nasce no checkout - assim que o produtor marca PROCESSANDO, deixa de contar. O filtro e `WHERE agricultor_id = <do token> AND status = \'PENDENTE\'`, entao nao ha como contar item alheio. Devolve `total` (o numero do contador) e `itens` (no maximo 10, para o resumo).',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Total de itens novos e um resumo deles.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        total: {
+                          type: 'integer',
+                          example: 3,
+                          description: 'Quantidade de itens PENDENTE do produtor.',
+                        },
+                        itens: {
+                          type: 'array',
+                          description: 'Ate 10 itens, do mais recente para o mais antigo.',
+                          items: { $ref: '#/components/schemas/ItemPedidoNovo' },
+                        },
+                      },
+                    },
                   },
                 },
               },

@@ -100,7 +100,7 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 638 no backend (25 suítes) e 73 no frontend (13 suítes), todos passando.
+Suíte de testes: 648 no backend (26 suítes) e 78 no frontend (14 suítes), todos passando.
 
 **Produção.** `agrohero-api` no Render e `agrohero-web` no Vercel, servidos a partir deste repositório. A versão em produção é o merge do PR #2 (`13f7843`). O ponto de rollback é a tag `v1.0.0-producao` (`c2a97a3`) — mas, depois da migration `008`, voltar o código exige restaurar também o schema do Neon. A API pública é `agrohero.onrender.com` (não `agrohero-api.onrender.com`) e o frontend de produção é `agrohero-six.vercel.app` (é essa a origem que o CORS libera). Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
@@ -132,7 +132,7 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 ```bash
 cd backend && npm test                                  # recria o schema
 cd backend && node src/database/run-seeds.js            # devolve categorias
-cd frontend && npx vitest run                           # 73 testes
+cd frontend && npx vitest run                           # 78 testes
 ```
 O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 
@@ -259,6 +259,18 @@ Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (62/62 apos o rodape 
 **A notificacao por e-mail sai FORA da transacao e nunca derruba o pedido.** `notificarPedidoCriado` roda depois do commit e engole a propria falha (log + segue). Uma falha de SMTP nao pode desfazer um pedido ja gravado, com estoque ja baixado: o pedido existe no banco e o cliente o ve no historico, que e a fonte de verdade. E-mail e informacao acessoria.
 
 **Os dois e-mails do checkout tem publicos diferentes.** `enviarEmailPedidoConfirmado` vai para o CLIENTE (o pedido existe e quanto vai pagar na retirada); `enviarEmailNovoPedidoProdutor` vai para CADA produtor com itens no pedido, com o valor que ele tem a receber. Confirmar o recebimento no painel, por sua vez, nao dispara e-mail - o produtor acabou de fazer a acao e ja ve o resultado na tela.
+
+---
+
+## Aviso de pedidos novos do produtor (T8)
+
+**"Novo" e o item PENDENTE, nao um campo "lido".** O contador e o popup nao guardam estado no banco: os dois derivam de `pedido_itens.status = 'PENDENTE'`, filtrado por `agricultor_id` do token. O numero cai quando o produtor avanca o item, e nao quando ele abre a tela - abrir a lista nao resolve pedido nenhum. Um campo `visto_em` ficaria errado assim que o produtor abrisse o painel em outro aparelho.
+
+**Contador e popup medem coisas diferentes.** O contador do cabecalho mostra o `total` de pendentes (como o numero do carrinho). O popup depende de `naoLidos` e so dispara em um AUMENTO da contagem (`novoTotal > ultimaContagem`). Com `total > 0` o popup reapareceria a cada ciclo de polling - insuportavel. Pelo mesmo motivo o popup nao abre no primeiro carregamento (login): a comparacao precisa de uma leitura anterior.
+
+**Context novo exige provider em TODO teste que renderiza componente que o consome.** Adicionar `usePedidosNovos` ao `Header` e a `AgricultorPedidos` quebrou `avatar.teste.jsx` e `agricultorPedidos.teste.jsx` com "usePedidosNovos must be used within a PedidosNovosProvider". Nao adianta procurar por "quem usa o contexto" - procurar por quem renderiza `<Header />` ou a pagina, porque o erro aponta para o filho, e nao para o teste que esqueceu o provider.
+
+**Polling em teste precisa de intervalo injetavel.** O `PedidosNovosProvider` aceita a prop `intervaloMs` para o teste disparar um ciclo sem esperar 30 s de relogio real. O padrao (30 s) vale em producao, porque ninguem passa a prop. O polling em segundo plano gera avisos de `act()` no vitest quando o ciclo cai fora de um `waitFor` - sao ruido, nao falha, e o intervalo um pouco maior reduz a frequencia.
 
 ---
 

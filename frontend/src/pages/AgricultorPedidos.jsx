@@ -5,6 +5,7 @@ import {
   confirmarPagamentoRecebido,
 } from '../services/pedidos.js';
 import { useNotificacao } from '../contexts/NotificacaoContext.jsx';
+import { usePedidosNovos } from '../contexts/PedidosNovosContext.jsx';
 import { Carregando, MensagemErro, EstadoVazio, Paginacao, Selo } from '../components/ui.jsx';
 import {
   formatarMoeda,
@@ -88,6 +89,7 @@ function ContatoDeEntrega({ endereco }) {
  */
 export default function AgricultorPedidos() {
   const { sucesso, erro: notificarErro } = useNotificacao();
+  const { marcarComoVisto, recarregar: recarregarAviso } = usePedidosNovos();
 
   const [itens, setItens] = useState([]);
   const [paginacao, setPaginacao] = useState(null);
@@ -114,6 +116,17 @@ export default function AgricultorPedidos() {
   }, [pagina, filtroStatus]);
 
   useEffect(() => {
+    /*
+     * Abrir a tela de pedidos e o proprio "eu vi": o POPUP nao volta a
+     * aparecer (zera o `naoLidos`). O contador do cabecalho continua
+     * mostrando o total de itens PENDENTE - ele so cai quando o produtor
+     * de fato avanca os itens, que e o que o numero representa.
+     *
+     * A recarga silenciosa atualiza o total com o que esta no servidor
+     * agora, sem abrir o popup por cima da tela que o produtor ja abriu.
+     */
+    marcarComoVisto();
+    recarregarAviso();
     carregar(pagina, filtroStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagina, filtroStatus]);

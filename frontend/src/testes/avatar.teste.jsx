@@ -9,6 +9,7 @@ import Header from '../components/Header.jsx';
 import { AuthProvider } from '../contexts/AuthContext.jsx';
 import { NotificacaoProvider } from '../contexts/NotificacaoContext.jsx';
 import { CarrinhoProvider } from '../contexts/CarrinhoContext.jsx';
+import { PedidosNovosProvider } from '../contexts/PedidosNovosContext.jsx';
 import { RotaPrivada } from '../routes/Guards.jsx';
 import Notificacoes from '../components/Notificacoes.jsx';
 import { criarClienteLogado, chamar, removerToken } from './ajudantes.js';
@@ -106,13 +107,15 @@ function renderizar() {
       <AuthProvider>
         <CarrinhoProvider>
           <NotificacaoProvider>
-            <Notificacoes />
-            <Header />
-            <Routes>
-              <Route element={<RotaPrivada />}>
-                <Route path="/perfil" element={<Perfil />} />
-              </Route>
-            </Routes>
+            <PedidosNovosProvider>
+              <Notificacoes />
+              <Header />
+              <Routes>
+                <Route element={<RotaPrivada />}>
+                  <Route path="/perfil" element={<Perfil />} />
+                </Route>
+              </Routes>
+            </PedidosNovosProvider>
           </NotificacaoProvider>
         </CarrinhoProvider>
       </AuthProvider>

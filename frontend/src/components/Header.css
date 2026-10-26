@@ -173,6 +173,17 @@
   gap: var(--esp-2);
 }
 
+/*
+ * Pedidos usa a mesma forma do carrinho: o contador fica ao lado do
+ * rotulo, e o alinhamento em flex mantem o numero no lugar quando ele
+ * aparece e some.
+ */
+.header__link--pedidos {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-2);
+}
+
 .header__contador {
   display: inline-flex;
   align-items: center;

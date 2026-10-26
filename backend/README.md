@@ -132,7 +132,7 @@ Idempotentes: podem rodar em todo deploy. Criam as 7 categorias e o administrado
 npm test
 ```
 
-A suíte tem 638 testes em 25 arquivos, incluindo os negativos: preço negativo, estoque negativo, total incoerente, subtotal manipulado, nota fora de 1–5, IDOR entre produtores e CEP inválido. São 56 de unidade (`tests/unit/`) e 582 de integração (`tests/integration/`).
+A suíte tem 648 testes em 26 arquivos, incluindo os negativos: preço negativo, estoque negativo, total incoerente, subtotal manipulado, nota fora de 1–5, IDOR entre produtores e CEP inválido. São 56 de unidade (`tests/unit/`) e 592 de integração (`tests/integration/`).
 
 Os testes recriam o schema do zero a cada execução no banco `agrohero_test`, então não dependem de migrations aplicadas previamente. Não há mock de banco: o objetivo é validar o comportamento real.
 
@@ -198,7 +198,7 @@ backend/
 | 23 | Deploy (publicado em Vercel + Render + Neon) | ✅ concluída |
 | 24 | Testes em produção | contínuo |
 
-Suíte de testes: **638 testes em 25 suítes** (56 de unidade e 582 de integração), todos passando (`npm test`).
+Suíte de testes: **648 testes em 26 suítes** (56 de unidade e 592 de integração), todos passando (`npm test`).
 
 ## Regras de negócio
 
@@ -209,6 +209,16 @@ Não há gateway, webhook nem estorno. O checkout grava o método escolhido (`PI
 O pagamento é por produtor, e não por pedido, porque um pedido pode ter itens de vários produtores e cada um recebe o seu — com uma linha por pedido, "quem confirma?" não teria resposta, e um produtor confirmaria o pagamento do produto de outro. A posse é resolvida pelo token: a consulta é por `(pedidoId, agricultorId)`, e o pedido de outro produtor devolve **404**, não 403.
 
 Detalhes que a implementação trata: confirmar duas vezes não é erro (o `UPDATE ... WHERE status = 'PENDENTE'` é condicional; sem linha, relê e responde `ja_estava_pago: true`); pedido cancelado recusa confirmação; e o cancelamento marca como `CANCELADO` apenas os pagamentos ainda `PENDENTE`.
+
+### Pedidos novos do produtor (contador e popup)
+
+O produtor precisa saber que entrou pedido sem ficar atualizando a página. A tela do cabeçalho mostra um contador ao lado de "Pedidos" — como o número do carrinho — e um popup abre quando **chega** pedido novo.
+
+"Novo" é o item em `PENDENTE`, o status com que ele nasce no checkout. Não há campo "lido" no banco: o número cai sozinho quando o produtor marca `PROCESSANDO`, e o mesmo critério vale para a contagem e para a lista, porque ambos vivem em `pedidoRepository` (`contarItensNovosDoAgricultor` e `listarItensNovosDoAgricultor`). O filtro é `WHERE agricultor_id = <do token> AND status = 'PENDENTE'` — o mesmo eixo de posse do painel, então o produtor A não conta item do B.
+
+O contador e o popup medem coisas diferentes de propósito. O contador mostra o total de itens `PENDENTE` e só cai quando o produtor avança os itens — abrir a lista não resolve pedido nenhum. Já o popup depende de `naoLidos` (quantos apareceram desde a última vez que ele abriu o painel) e só dispara em um **aumento** na contagem: se a condição fosse `total > 0`, o aviso reapareceria a cada ciclo de polling. No login o popup não abre, mesmo havendo pedidos pendentes — o que interessa é o que chegou enquanto ele estava fora, e para isso o contador já basta.
+
+No frontend, `PedidosNovosContext` faz o polling a cada 30 s (2 requisições/min, bem abaixo do limite geral de 300/15 min) e só para o produtor. A falha de rede é engolida: o aviso é acessório e não pode derrubar a navegação — a tela de pedidos trata o próprio erro.
 
 ### Avaliações — a regra de autorização
 

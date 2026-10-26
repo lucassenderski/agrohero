@@ -5,6 +5,7 @@ import AgricultorPedidos from '../pages/AgricultorPedidos.jsx';
 import PedidoDetalhe from '../pages/PedidoDetalhe.jsx';
 import { AuthProvider } from '../contexts/AuthContext.jsx';
 import { NotificacaoProvider } from '../contexts/NotificacaoContext.jsx';
+import { PedidosNovosProvider } from '../contexts/PedidosNovosContext.jsx';
 import { RotaPorTipo } from '../routes/Guards.jsx';
 import Notificacoes from '../components/Notificacoes.jsx';
 import { removerToken, salvarToken } from '../services/api.js';
@@ -44,20 +45,22 @@ function renderizarComoProdutor(token, rota = '/agricultor/pedidos') {
     <MemoryRouter initialEntries={[rota]}>
       <AuthProvider>
         <NotificacaoProvider>
-          <Notificacoes />
-          <Routes>
-            {/*
-             * A rota usa o MESMO <RotaPorTipo> do App: a pagina assume
-             * que existe usuario carregado, e e o guard que segura o
-             * render ate o perfil chegar. Sem ele, o fetch da pagina
-             * pode terminar antes do AuthContext e o componente le de um
-             * usuario ainda null.
-             */}
-            <Route element={<RotaPorTipo tipos={['agricultor']} />}>
-              <Route path="/agricultor/pedidos" element={<AgricultorPedidos />} />
-              <Route path="/pedidos/:id" element={<PedidoDetalhe />} />
-            </Route>
-          </Routes>
+          <PedidosNovosProvider>
+            <Notificacoes />
+            <Routes>
+              {/*
+               * A rota usa o MESMO <RotaPorTipo> do App: a pagina assume
+               * que existe usuario carregado, e e o guard que segura o
+               * render ate o perfil chegar. Sem ele, o fetch da pagina
+               * pode terminar antes do AuthContext e o componente le de um
+               * usuario ainda null.
+               */}
+              <Route element={<RotaPorTipo tipos={['agricultor']} />}>
+                <Route path="/agricultor/pedidos" element={<AgricultorPedidos />} />
+                <Route path="/pedidos/:id" element={<PedidoDetalhe />} />
+              </Route>
+            </Routes>
+          </PedidosNovosProvider>
         </NotificacaoProvider>
       </AuthProvider>
     </MemoryRouter>,

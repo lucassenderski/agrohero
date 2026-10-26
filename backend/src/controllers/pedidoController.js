@@ -35,6 +35,19 @@ export const listar = asyncHandler(async (req, res) => {
   return respostaSucesso(res, itens, 200, paginacao);
 });
 
+/*
+ * GET /pedidos/agricultor/novos - itens novos (PENDENTE) do produtor.
+ *
+ * Alimenta o contador e o popup do cabecalho. E uma rota literal sob
+ * `/agricultor`, entao vem antes de qualquer `:id` pelo mesmo motivo de
+ * `/agricultor`: senao "novos" seria lido como id.
+ */
+export const listarNovos = asyncHandler(async (req, res) => {
+  const { total, itens } = await pedidoService.listarNovosDoAgricultor(req.usuario);
+
+  return respostaSucesso(res, { total, itens });
+});
+
 /* GET /pedidos/:id - detalhe com autorizacao por tipo de usuario. */
 export const obter = asyncHandler(async (req, res) => {
   const { id } = req.dadosValidados.params;
@@ -112,6 +125,7 @@ export const confirmarPagamento = asyncHandler(async (req, res) => {
 
 export default {
   listar,
+  listarNovos,
   obter,
   cancelar,
   alterarStatusItem,

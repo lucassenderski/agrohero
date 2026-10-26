@@ -1,0 +1,28 @@
+/* Lista do aviso de pedidos novos, dentro do modal. */
+
+.aviso-pedidos__lista {
+  display: grid;
+  gap: var(--esp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aviso-pedidos__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-4);
+  padding-bottom: var(--esp-3);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.aviso-pedidos__item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.aviso-pedidos__produto {
+  display: grid;
+  gap: var(--esp-1);
+}

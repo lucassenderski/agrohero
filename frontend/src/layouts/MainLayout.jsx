@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Header from '../components/Header.jsx';
 import Footer from '../components/Footer.jsx';
 import Notificacoes from '../components/Notificacoes.jsx';
+import AvisoPedidosNovos from '../components/AvisoPedidosNovos.jsx';
 
 /*
  * Layout principal: cabecalho, conteudo da rota, rodape e a regiao de
@@ -33,6 +34,7 @@ export default function MainLayout() {
       </main>
       <Footer />
       <Notificacoes />
+      <AvisoPedidosNovos />
     </>
   );
 }
