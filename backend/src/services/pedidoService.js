@@ -261,6 +261,37 @@ export async function listarDoAgricultor(usuario, filtros) {
 }
 
 /*
+ * ITENS NOVOS DO AGRICULTOR, para o aviso no cabecalho.
+ *
+ * "Novo" e o item ainda em PENDENTE. A definicao vive no repositorio (o
+ * WHERE), e nao aqui, para a contagem e a lista usarem o mesmo criterio -
+ * dois lugares decidindo o que e "novo" divergiriam, e o contador
+ * mostraria um numero que a lista nao confirma.
+ *
+ * O produtor vem do token, como em todo o resto do painel: nao ha id de
+ * agricultor em parametro nenhum, entao nao existe aviso de pedido
+ * alheio para forjar.
+ *
+ * A lista e curta de proposito - e um resumo para o popup, nao a tela de
+ * pedidos. O total e o numero do contador; `itens` traz so os primeiros,
+ * e a tela completa continua sendo `/agricultor/pedidos`.
+ */
+const LIMITE_ITENS_NOVOS = 10;
+
+export async function listarNovosDoAgricultor(usuario) {
+  const agricultor = await obterAgricultorDoUsuario(usuario);
+
+  const [total, itens] = await Promise.all([
+    pedidoRepository.contarItensNovosDoAgricultor(agricultor.id),
+    pedidoRepository.listarItensNovosDoAgricultor(agricultor.id, {
+      limite: LIMITE_ITENS_NOVOS,
+    }),
+  ]);
+
+  return { total, itens };
+}
+
+/*
  * ALTERA O STATUS DE UM ITEM DE PEDIDO (agricultor).
  *
  * Tres checagens, nesta ordem:
@@ -718,6 +749,7 @@ export async function avancarPedidoComoAdmin(pedidoId, novoStatus) {
 export default {
   listarDoConsumidor,
   listarDoAgricultor,
+  listarNovosDoAgricultor,
   listarTodos,
   obter,
   alterarStatusItem,

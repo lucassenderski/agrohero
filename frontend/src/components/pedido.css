@@ -748,3 +748,28 @@
   gap: var(--esp-2);
   flex-wrap: wrap;
 }
+
+/*
+ * Contato de entrega na tabela do produtor.
+ *
+ * O endereco completo e o telefone sao o que permitem ao produtor
+ * entregar. Empilhados em coluna para caber na celula sem esticar a
+ * tabela, e o telefone com peso proprio para ser lido de relance.
+ */
+.entrega-contato {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  font-size: var(--texto-sm);
+}
+
+.entrega-contato__nome {
+  color: var(--cor-primaria-700);
+}
+
+.entrega-contato__telefone {
+  font-weight: var(--peso-medio);
+  color: var(--cor-primaria-600);
+  white-space: nowrap;
+}

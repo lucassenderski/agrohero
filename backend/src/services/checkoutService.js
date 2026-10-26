@@ -19,7 +19,8 @@ import logger from '../config/logger.js';
  * 1) O SERVIDOR RECALCULA TUDO. Nenhum valor vem do cliente. O preco
  *    sai de `produtos.preco`, o frete da regra do freteService e os
  *    totais de uma soma feita aqui. O corpo da requisicao carrega
- *    apenas `endereco_id` e `metodo_pagamento` - nenhum numero.
+ *    apenas `endereco_id`, `metodo_pagamento` e `telefone_contato` -
+ *    nenhum numero de valor.
  *
  * 2) O ESTOQUE E RESERVADO NO BANCO, DE FORMA CONDICIONAL. A baixa usa
  *    `UPDATE ... WHERE estoque >= $2`. Quem decide se ha estoque e o
@@ -145,8 +146,18 @@ function validarEMontarItens(itens) {
  * apagar o endereco depois, e o pedido de hoje precisa continuar
  * mostrando para onde o produto foi enviado. Um pedido e um documento
  * historico, nao uma view do cadastro atual.
+ *
+ * O TELEFONE entra aqui, e nao como JOIN em `usuarios` na leitura, pela
+ * mesma razao: e o contato combinado no momento da compra, e o produtor
+ * precisa dele na hora da entrega. O telefone fica no snapshot para que
+ * a consulta do agricultor continue sendo uma leitura so de `pedidos` -
+ * e para que apagar o telefone do perfil nao apague o do pedido ja feito.
+ *
+ * O telefone e opcional no cadastro. Quando ausente, a chave vai como
+ * `null` e a interface avisa o produtor - melhor do que o campo sumir e
+ * ele achar que a tela esta quebrada.
  */
-function montarSnapshotEndereco(endereco) {
+function montarSnapshotEndereco(endereco, telefone) {
   return {
     endereco_id: endereco.id,
     nome_destinatario: endereco.nome_destinatario,
@@ -157,7 +168,23 @@ function montarSnapshotEndereco(endereco) {
     bairro: endereco.bairro,
     cidade: endereco.cidade,
     estado: endereco.estado,
+    telefone: telefone ?? null,
   };
+}
+
+/*
+ * Decide o telefone que vai para o snapshot.
+ *
+ * O numero CONFIRMADO no checkout vence o do cadastro: o cliente pode
+ * estar comprando para outra pessoa, ou ter trocado de numero e nao
+ * atualizado o perfil. Sem telefone no corpo, cai no do perfil - assim
+ * quem ja tem contato cadastrado nao precisa digitar de novo.
+ *
+ * Sem os dois, fica `null`: o produtor ve "sem telefone cadastrado" e
+ * sabe que o cliente nao informou, em vez de achar que a tela quebrou.
+ */
+function resolverTelefoneContato(usuario, telefoneContato) {
+  return telefoneContato ?? usuario.telefone ?? null;
 }
 
 /*
@@ -208,7 +235,7 @@ async function montarResumo(usuario, enderecoId) {
       disponivel: item.ativo && item.estoque >= item.quantidade,
       estoque_disponivel: item.estoque,
     })),
-    endereco: montarSnapshotEndereco(endereco),
+    endereco: montarSnapshotEndereco(endereco, resolverTelefoneContato(usuario)),
     valor_produtos: valorProdutos,
     valor_frete: frete.valor,
     frete_gratis: frete.gratis,
@@ -441,7 +468,7 @@ async function notificarPedidoCriado(usuario, pedido, pagamentos) {
  * transacao e o checkout fica com uma garantia a mais - ou tudo existe,
  * ou nada existe.
  */
-export async function finalizar(usuario, { enderecoId, metodoPagamento }) {
+export async function finalizar(usuario, { enderecoId, metodoPagamento, telefoneContato }) {
   const resultado = await pedidoRepository.emTransacao(async (cliente) => {
     /* 1. Carrinho do consumidor (criado se nao existir). */
     const carrinho = await carrinhoRepository.obterOuCriar(usuario.id);
@@ -476,7 +503,10 @@ export async function finalizar(usuario, { enderecoId, metodoPagamento }) {
       valorProdutos,
       valorFrete: frete.valor,
       valorTotal,
-      enderecoEntrega: montarSnapshotEndereco(endereco),
+      enderecoEntrega: montarSnapshotEndereco(
+        endereco,
+        resolverTelefoneContato(usuario, telefoneContato),
+      ),
     });
 
     /* 6. Itens. */

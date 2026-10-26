@@ -67,12 +67,12 @@ beforeEach(async () => {
   await limparDados();
 
   const { rows: usuarios } = await pool.query(`
-    INSERT INTO usuarios (nome, email, senha_hash, tipo) VALUES
-      ('Cliente',   'cli@teste.local',  '$2b$12$hash', 'cliente'),
-      ('Outro',     'out@teste.local',  '$2b$12$hash', 'cliente'),
-      ('Produtor A','pa@teste.local',   '$2b$12$hash', 'agricultor'),
-      ('Produtor B','pb@teste.local',   '$2b$12$hash', 'agricultor'),
-      ('Admin',     'adm@teste.local',  '$2b$12$hash', 'administrador')
+    INSERT INTO usuarios (nome, email, senha_hash, tipo, telefone) VALUES
+      ('Cliente',   'cli@teste.local',  '$2b$12$hash', 'cliente',       '19999998888'),
+      ('Outro',     'out@teste.local',  '$2b$12$hash', 'cliente',       '19988887777'),
+      ('Produtor A','pa@teste.local',   '$2b$12$hash', 'agricultor',    NULL),
+      ('Produtor B','pb@teste.local',   '$2b$12$hash', 'agricultor',    NULL),
+      ('Admin',     'adm@teste.local',  '$2b$12$hash', 'administrador', NULL)
     RETURNING id, email, tipo
   `);
 
@@ -406,6 +406,66 @@ describe('visao do agricultor', () => {
       .get(`${PEDIDOS}/${pedido.pedido.id}`)
       .set(auth(tokenAgricultorB))
       .expect(404);
+  });
+
+  /*
+   * O produtor precisa do contato para ENTREGAR: endereco completo e
+   * telefone. Sem isso ele nao consegue chegar ao cliente nem avisar
+   * quando nao houver ninguem em casa.
+   *
+   * O telefone sai do snapshot do pedido, nao do cadastro do consumidor:
+   * e o contato combinado no momento da compra.
+   */
+  test('na listagem, o item traz o endereco completo e o telefone do comprador', async () => {
+    await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+
+    const resposta = await request(app)
+      .get(`${PEDIDOS}/agricultor`)
+      .set(auth(tokenAgricultorA))
+      .expect(200);
+
+    const entrega = resposta.body.dados[0].endereco_entrega;
+
+    expect(entrega).toBeTruthy();
+    expect(entrega.nome_destinatario).toBe('Maria Souza');
+    expect(entrega.rua).toBe('Rua das Flores');
+    expect(entrega.numero).toBe('123');
+    expect(entrega.bairro).toBe('Centro');
+    expect(entrega.cidade).toBe('Campinas');
+    expect(entrega.estado).toBe('SP');
+    expect(entrega.cep).toBe('13010100');
+    expect(entrega.telefone).toBe('19999998888');
+  });
+
+  test('no detalhe, o pedido traz o telefone do comprador', async () => {
+    const pedido = await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+
+    const resposta = await request(app)
+      .get(`${PEDIDOS}/${pedido.pedido.id}`)
+      .set(auth(tokenAgricultorA))
+      .expect(200);
+
+    expect(resposta.body.dados.endereco_entrega.telefone).toBe('19999998888');
+    expect(resposta.body.dados.endereco_entrega.numero).toBe('123');
+  });
+
+  /*
+   * Telefone ausente vira `null`, e nao some da resposta. O produtor
+   * precisa distinguir "o cliente nao cadastrou telefone" de "a tela nao
+   * mostrou esse campo".
+   */
+  test('comprador sem telefone devolve a chave nula, nao ausente', async () => {
+    await pool.query(`UPDATE usuarios SET telefone = NULL WHERE id = $1`, [idConsumidorCliente]);
+    await criarPedido([{ produto_id: idProdutoA, quantidade: 1 }]);
+
+    const resposta = await request(app)
+      .get(`${PEDIDOS}/agricultor`)
+      .set(auth(tokenAgricultorA))
+      .expect(200);
+
+    const entrega = resposta.body.dados[0].endereco_entrega;
+    expect(entrega).toHaveProperty('telefone');
+    expect(entrega.telefone).toBeNull();
   });
 });
 

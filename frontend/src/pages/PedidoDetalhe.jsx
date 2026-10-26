@@ -14,6 +14,7 @@ import {
 import {
   formatarMoeda,
   formatarDataHora,
+  formatarTelefone,
   rotularStatusPedido,
   rotularStatusPagamento,
   classeStatusPedido,
@@ -209,6 +210,28 @@ export default function PedidoDetalhe() {
             <p className="campo__dica">
               {resumirEndereco(pedido.endereco_entrega) || 'Endereco nao informado.'}
             </p>
+            {/*
+              O telefone do comprador so interessa ao PRODUTOR, que e quem
+              entrega e precisa avisar quando nao houver ninguem em casa. O
+              consumidor ve o proprio endereco e nao ganha nada com o
+              proprio telefone repetido aqui.
+            */}
+            {pedido.visao === 'agricultor' && (
+              <p className="campo__dica">
+                {pedido.endereco_entrega?.telefone ? (
+                  <>
+                    Contato:{' '}
+                    <a
+                      href={`tel:${String(pedido.endereco_entrega.telefone).replace(/\D/g, '')}`}
+                    >
+                      {formatarTelefone(pedido.endereco_entrega.telefone)}
+                    </a>
+                  </>
+                ) : (
+                  'O cliente nao cadastrou telefone de contato.'
+                )}
+              </p>
+            )}
           </section>
 
           {itensAvaliaveis.length > 0 && (

@@ -54,7 +54,8 @@ npm run preview   # serve o build localmente na porta 4173
 ```
 frontend/src/
 ├── components/  Header, Footer, ProductCard, CartItem, ui...
-├── contexts/    AuthContext, CarrinhoContext, NotificacaoContext
+├── contexts/    AuthContext, CarrinhoContext, NotificacaoContext,
+│                PedidosNovosContext
 ├── dados/       receitas.js - conteudo editorial
 ├── hooks/       useRequisicao, useAuth, useCarrinho...
 ├── layouts/     MainLayout
@@ -83,6 +84,8 @@ cabecalho.
 
 **Autorização de verdade é no backend.** As rotas protegidas do React Router são usadas para experiência do usuário (não mostrar tela que não faz sentido), nunca como barreira de segurança.
 
+**Aviso de pedidos novos do produtor.** O `PedidosNovosContext` consulta `/pedidos/agricultor/novos` a cada 30 s (só para produtor autenticado) e mantém dois estados: o contador ao lado de "Pedidos" — como o número do carrinho — mostra o total de itens `PENDENTE`, e o popup só abre quando a contagem **aumenta**, comparada com a última leitura. Assim o popup não reaparece a cada ciclo, e não abre no login. Abrir a tela de pedidos zera o aviso; o contador continua aceso até o produtor avançar os itens, porque abrir a lista não resolve pedido nenhum. A falha de rede do polling é ignorada de propósito: o aviso é acessório e não pode interromper a navegação.
+
 ## Status do desenvolvimento
 
 | Fase | Descrição | Situação |
@@ -96,7 +99,7 @@ cabecalho.
 
 São de integração: **nenhum `fetch` é mockado**, cada teste fala com a API real. Isso é deliberado — o que precisa ser verificado é justamente o que um mock esconderia: o formato do envelope, os nomes dos campos, os códigos de erro e as regras de autorização.
 
-São **62 testes em 11 arquivos**. Exigem um backend no ar, em modo `test` (nesse modo o rate limit fica desligado; sem isso, uma suíte com vários cadastros estoura o limite e falha por motivo errado):
+São **78 testes em 14 arquivos**. Exigem um backend no ar, em modo `test` (nesse modo o rate limit fica desligado; sem isso, uma suíte com vários cadastros estoura o limite e falha por motivo errado):
 
 ```bash
 # terminal 1 - API em modo de teste

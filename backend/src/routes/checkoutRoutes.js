@@ -16,7 +16,8 @@ import {
  *
  * Nao ha `carrinho_id` nem valor em nenhuma rota: o checkout trabalha
  * sobre o carrinho do token e recalcula todos os numeros a partir do
- * banco. O corpo carrega so `endereco_id` e `metodo_pagamento`.
+ * banco. O corpo carrega so `endereco_id`, `metodo_pagamento` e
+ * `telefone_contato` (o contato que o produtor usa na entrega).
  */
 
 const router = Router();

@@ -114,3 +114,32 @@ export function resumirEndereco(endereco) {
   ].filter(Boolean);
   return partes.join(' - ');
 }
+
+/*
+ * CEP no formato de exibicao. O banco guarda so os 8 digitos (mesma
+ * decisao do telefone); a mascara vive aqui, na leitura.
+ */
+export function formatarCep(cep) {
+  const digitos = String(cep || '').replace(/\D/g, '');
+  if (digitos.length !== 8) return cep || '';
+  return `${digitos.slice(0, 5)}-${digitos.slice(5)}`;
+}
+
+/*
+ * Telefone no formato de exibicao.
+ *
+ * Aceita 10 digitos (fixo: DDD + 8) ou 11 (celular: DDD + 9), que e o
+ * mesmo dominio validado no cadastro. Fora disso devolve o valor
+ * original - melhor mostrar o que veio do que esconder um dado que o
+ * produtor precisa para entregar.
+ */
+export function formatarTelefone(telefone) {
+  const digitos = String(telefone || '').replace(/\D/g, '');
+  if (digitos.length === 11) {
+    return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`;
+  }
+  if (digitos.length === 10) {
+    return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 6)}-${digitos.slice(6)}`;
+  }
+  return telefone || '';
+}

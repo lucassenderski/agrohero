@@ -5,11 +5,15 @@ import {
   confirmarPagamentoRecebido,
 } from '../services/pedidos.js';
 import { useNotificacao } from '../contexts/NotificacaoContext.jsx';
+import { usePedidosNovos } from '../contexts/PedidosNovosContext.jsx';
 import { Carregando, MensagemErro, EstadoVazio, Paginacao, Selo } from '../components/ui.jsx';
 import {
   formatarMoeda,
   formatarDataHora,
   formatarQuantidade,
+  formatarCep,
+  formatarTelefone,
+  resumirEndereco,
   rotularStatusPedido,
   rotularStatusPagamento,
   classeStatusPedido,
@@ -36,6 +40,46 @@ const ROTULO_ACAO = {
 };
 
 /*
+ * Contato de entrega na visao do produtor.
+ *
+ * O produtor precisa do endereco completo e de um telefone para entregar
+ * e para avisar quando nao houver ninguem em casa. Antes a tabela mostrava
+ * apenas `cidade/UF`, o que nao permite chegar ao cliente.
+ *
+ * O telefone vem do snapshot do pedido (`endereco_entrega.telefone`), e
+ * nao de uma consulta ao cadastro do consumidor: o pedido guarda o
+ * contato combinado no momento da compra, e a leitura do agricultor
+ * continua sendo uma so consulta a `pedidos`.
+ *
+ * O telefone e opcional no cadastro. Quando nao ha, a tela diz isso em
+ * vez de sumir com a linha - o produtor precisa saber que nao ha contato,
+ * e nao achar que a pagina esta incompleta.
+ */
+function ContatoDeEntrega({ endereco }) {
+  if (!endereco) return <span className="campo__dica">-</span>;
+
+  return (
+    <div className="entrega-contato">
+      {endereco.nome_destinatario && (
+        <strong className="entrega-contato__nome">{endereco.nome_destinatario}</strong>
+      )}
+      <span>{resumirEndereco(endereco)}</span>
+      {endereco.cep && <span className="campo__dica">CEP {formatarCep(endereco.cep)}</span>}
+      {endereco.telefone ? (
+        <a
+          className="entrega-contato__telefone"
+          href={`tel:${String(endereco.telefone).replace(/\D/g, '')}`}
+        >
+          {formatarTelefone(endereco.telefone)}
+        </a>
+      ) : (
+        <span className="campo__dica">Sem telefone cadastrado</span>
+      )}
+    </div>
+  );
+}
+
+/*
  * Pedidos do produtor.
  *
  * A API devolve ITENS, nao pedidos inteiros: um pedido pode misturar
@@ -45,6 +89,7 @@ const ROTULO_ACAO = {
  */
 export default function AgricultorPedidos() {
   const { sucesso, erro: notificarErro } = useNotificacao();
+  const { marcarComoVisto, recarregar: recarregarAviso } = usePedidosNovos();
 
   const [itens, setItens] = useState([]);
   const [paginacao, setPaginacao] = useState(null);
@@ -71,6 +116,17 @@ export default function AgricultorPedidos() {
   }, [pagina, filtroStatus]);
 
   useEffect(() => {
+    /*
+     * Abrir a tela de pedidos e o proprio "eu vi": o POPUP nao volta a
+     * aparecer (zera o `naoLidos`). O contador do cabecalho continua
+     * mostrando o total de itens PENDENTE - ele so cai quando o produtor
+     * de fato avanca os itens, que e o que o numero representa.
+     *
+     * A recarga silenciosa atualiza o total com o que esta no servidor
+     * agora, sem abrir o popup por cima da tela que o produtor ja abriu.
+     */
+    marcarComoVisto();
+    recarregarAviso();
     carregar(pagina, filtroStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagina, filtroStatus]);
@@ -175,7 +231,7 @@ export default function AgricultorPedidos() {
                   <th>Subtotal</th>
                   <th>Situacao</th>
                   <th>Pagamento</th>
-                  <th>Entrega</th>
+                  <th>Entrega e contato</th>
                   <th>Acoes</th>
                 </tr>
               </thead>
@@ -216,9 +272,7 @@ export default function AgricultorPedidos() {
                       )}
                     </td>
                     <td>
-                      {item.endereco_entrega
-                        ? `${item.endereco_entrega.cidade}/${item.endereco_entrega.estado}`
-                        : '-'}
+                      <ContatoDeEntrega endereco={item.endereco_entrega} />
                     </td>
                     <td>
                       <div className="tabela__acoes">

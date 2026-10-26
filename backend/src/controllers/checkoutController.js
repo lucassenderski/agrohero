@@ -34,11 +34,16 @@ export const previa = asyncHandler(async (req, res) => {
  * pagamento ter sido aprovado, recusado ou estar pendente.
  */
 export const finalizar = asyncHandler(async (req, res) => {
-  const { endereco_id: enderecoId, metodo_pagamento: metodoPagamento } = req.dadosValidados.body;
+  const {
+    endereco_id: enderecoId,
+    metodo_pagamento: metodoPagamento,
+    telefone_contato: telefoneContato,
+  } = req.dadosValidados.body;
 
   const resultado = await checkoutService.finalizar(req.usuario, {
     enderecoId,
     metodoPagamento,
+    telefoneContato,
   });
 
   return respostaCriada(res, resultado);

@@ -583,6 +583,13 @@ const schemas = {
     properties: {
       endereco_id: { type: 'integer', example: 1 },
       metodo_pagamento: { type: 'string', enum: ['PIX', 'CARTAO', 'DINHEIRO'], example: 'PIX' },
+      telefone_contato: {
+        type: 'string',
+        nullable: true,
+        example: '19999998888',
+        description:
+          'Contato para a entrega, apenas digitos (10 ou 11, com DDD). Opcional: quando ausente, o checkout usa o telefone do perfil. Quando presente, VENCE o do perfil - e o numero confirmado para esta compra. Vai para o snapshot `endereco_entrega` e e o contato que o produtor usa para combinar a entrega.',
+      },
     },
   },
 
@@ -677,7 +684,25 @@ const schemas = {
       endereco_entrega: {
         type: 'object',
         description:
-          'Snapshot do endereco no momento da compra. Nao e uma referencia: o cliente pode editar ou apagar o endereco depois, e o pedido precisa continuar mostrando para onde foi enviado.',
+          'Snapshot do endereco no momento da compra. Nao e uma referencia: o cliente pode editar ou apagar o endereco depois, e o pedido precisa continuar mostrando para onde foi enviado. O telefone fica aqui (e nao em uma consulta ao cadastro) para que o produtor tenha o contato combinado na compra e a leitura continue sendo uma so consulta a `pedidos`.',
+        properties: {
+          endereco_id: { type: 'integer', example: 1 },
+          nome_destinatario: { type: 'string', example: 'Maria Souza' },
+          cep: { type: 'string', example: '13010100' },
+          rua: { type: 'string', example: 'Rua das Flores' },
+          numero: { type: 'string', example: '123' },
+          complemento: { type: 'string', nullable: true, example: null },
+          bairro: { type: 'string', example: 'Centro' },
+          cidade: { type: 'string', example: 'Campinas' },
+          estado: { type: 'string', example: 'SP' },
+          telefone: {
+            type: 'string',
+            nullable: true,
+            example: '19999998888',
+            description:
+              'Contato do comprador, so digitos. E opcional no cadastro: pode vir `null`, e o produtor ve "sem telefone cadastrado" na tela. Exposto apenas ao produtor com item no pedido - e o contato que ele usa para entregar.',
+          },
+        },
       },
       criado_em: { type: 'string', format: 'date-time' },
     },
@@ -709,6 +734,31 @@ const schemas = {
         description:
           'O status e POR ITEM. `pedidos.status` e derivado destes por trigger no banco.',
       },
+    },
+  },
+
+  /*
+   * Item do aviso de pedidos novos. E um recorte do ItemPedido: o popup
+   * precisa apenas do que identifica o pedido e ajuda o produtor a
+   * decidir se abre o painel agora. O endereco completo fica na tela de
+   * pedidos - um popup nao precisa do dado pessoal inteiro.
+   */
+  ItemPedidoNovo: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer', example: 1 },
+      pedido_id: { type: 'integer', example: 1 },
+      produto_nome: { type: 'string', example: 'Tomate' },
+      quantidade: { type: 'integer', example: 2 },
+      unidade: { type: 'string', example: 'kg' },
+      subtotal: { type: 'number', example: 17 },
+      comprador_cidade: {
+        type: 'string',
+        example: 'Campinas',
+        description: 'Cidade do snapshot `endereco_entrega`. Nulo se o endereco nao a tiver.',
+      },
+      comprador_estado: { type: 'string', example: 'SP' },
+      criado_em: { type: 'string', format: 'date-time' },
     },
   },
 
@@ -2885,6 +2935,53 @@ export const openapi = {
                   properties: {
                     sucesso: { type: 'boolean', example: true },
                     dados: { type: 'array', items: { $ref: '#/components/schemas/ItemPedido' } },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/NaoAutenticado' },
+          403: { $ref: '#/components/responses/SemPermissao' },
+        },
+      },
+    },
+
+    /*
+     * Rota do aviso de pedidos novos do produtor. Vem antes de
+     * `/pedidos/{id}` para preservar a leitura de que as rotas literais
+     * de `/agricultor` ficam juntas, como no arquivo de rotas.
+     */
+    '/api/v1/pedidos/agricultor/novos': {
+      get: {
+        tags: ['Pedidos'],
+        summary: 'Itens novos (PENDENTE) do agricultor autenticado',
+        description:
+          'Alimenta o contador e o popup do produtor. "Novo" e o item em PENDENTE, o status com que ele nasce no checkout - assim que o produtor marca PROCESSANDO, deixa de contar. O filtro e `WHERE agricultor_id = <do token> AND status = \'PENDENTE\'`, entao nao ha como contar item alheio. Devolve `total` (o numero do contador) e `itens` (no maximo 10, para o resumo).',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Total de itens novos e um resumo deles.',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    sucesso: { type: 'boolean', example: true },
+                    dados: {
+                      type: 'object',
+                      properties: {
+                        total: {
+                          type: 'integer',
+                          example: 3,
+                          description: 'Quantidade de itens PENDENTE do produtor.',
+                        },
+                        itens: {
+                          type: 'array',
+                          description: 'Ate 10 itens, do mais recente para o mais antigo.',
+                          items: { $ref: '#/components/schemas/ItemPedidoNovo' },
+                        },
+                      },
+                    },
                   },
                 },
               },

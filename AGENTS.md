@@ -100,7 +100,7 @@ Sempre com banco real — sem mocks. `tests/helpers/banco.js` recria o schema e 
 ## Estado
 
 Fases 0–24 implementadas. Ver o `README.md` para a tabela de fases e o estado atual de cada uma.
-Suíte de testes: 630 no backend (25 suítes) e 62 no frontend (11 suítes), todos passando.
+Suíte de testes: 648 no backend (26 suítes) e 78 no frontend (14 suítes), todos passando.
 
 **Produção.** `agrohero-api` no Render e `agrohero-web` no Vercel, servidos a partir deste repositório. A versão em produção é o merge do PR #2 (`13f7843`). O ponto de rollback é a tag `v1.0.0-producao` (`c2a97a3`) — mas, depois da migration `008`, voltar o código exige restaurar também o schema do Neon. A API pública é `agrohero.onrender.com` (não `agrohero-api.onrender.com`) e o frontend de produção é `agrohero-six.vercel.app` (é essa a origem que o CORS libera). Conferência de qual commit está servido e o passo a passo do rollback estão na seção 9 de `docs/DEPLOY.md`.
 
@@ -132,7 +132,7 @@ Em transação própria, então nada é aplicado pela metade - o banco fica inta
 ```bash
 cd backend && npm test                                  # recria o schema
 cd backend && node src/database/run-seeds.js            # devolve categorias
-cd frontend && npx vitest run                           # 62 testes
+cd frontend && npx vitest run                           # 78 testes
 ```
 O `run-seeds.js` le `DATABASE_URL` do `.env`; para o banco de teste, passe `DATABASE_URL=postgresql://agrohero:agrohero_dev@localhost:5433/agrohero_test` na chamada.
 
@@ -218,7 +218,7 @@ Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (62/62 apos o rodape 
 
 **BIGINT do pg chega como string; NUMERIC chega como Number (parser do projeto).** Teste do carrinho falhou esperando `1` e recebendo `"1"` em `produto_id`. Antes de assertar, conferir o tipo da coluna: id e BIGINT (string), preco e NUMERIC (Number, por causa do parser em `pool.js`).
 
-**Preco do cliente nao existe no schema; no checkout isso vale para o pedido inteiro.** O corpo do `POST /checkout` aceita so `endereco_id` e `metodo_pagamento`. Nao ha `valor_total`, `valor_frete` nem `preco`. Se houvesse, o cliente mandaria 0.01 e a API gravaria o pedido por 0.01. A defesa e a ausencia do campo, nao a validacao dele.
+**Preco do cliente nao existe no schema; no checkout isso vale para o pedido inteiro.** O corpo do `POST /checkout` aceita so `endereco_id`, `metodo_pagamento` e `telefone_contato`. Nao ha `valor_total`, `valor_frete` nem `preco`. Se houvesse, o cliente mandaria 0.01 e a API gravaria o pedido por 0.01. A defesa e a ausencia do campo, nao a validacao dele. O `telefone_contato` nao fere isso: e contato, nao valor - o preco continua vindo so de `produtos.preco`.
 
 **Adicionar ao carrinho valida estoque; isso muda como se escreve teste de checkout.** Varios testes falharam por baixar o estoque ANTES de montar o carrinho - a propria adicao recusava. O cenario que se quer testar e "o carrinho foi montado quando havia estoque, e o estoque caiu depois". Ordem: encher o carrinho, depois ajustar o estoque por SQL.
 
@@ -262,7 +262,21 @@ Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (62/62 apos o rodape 
 
 ---
 
+## Aviso de pedidos novos do produtor (T8)
+
+**"Novo" e o item PENDENTE, nao um campo "lido".** O contador e o popup nao guardam estado no banco: os dois derivam de `pedido_itens.status = 'PENDENTE'`, filtrado por `agricultor_id` do token. O numero cai quando o produtor avanca o item, e nao quando ele abre a tela - abrir a lista nao resolve pedido nenhum. Um campo `visto_em` ficaria errado assim que o produtor abrisse o painel em outro aparelho.
+
+**Contador e popup medem coisas diferentes.** O contador do cabecalho mostra o `total` de pendentes (como o numero do carrinho). O popup depende de `naoLidos` e so dispara em um AUMENTO da contagem (`novoTotal > ultimaContagem`). Com `total > 0` o popup reapareceria a cada ciclo de polling - insuportavel. Pelo mesmo motivo o popup nao abre no primeiro carregamento (login): a comparacao precisa de uma leitura anterior.
+
+**Context novo exige provider em TODO teste que renderiza componente que o consome.** Adicionar `usePedidosNovos` ao `Header` e a `AgricultorPedidos` quebrou `avatar.teste.jsx` e `agricultorPedidos.teste.jsx` com "usePedidosNovos must be used within a PedidosNovosProvider". Nao adianta procurar por "quem usa o contexto" - procurar por quem renderiza `<Header />` ou a pagina, porque o erro aponta para o filho, e nao para o teste que esqueceu o provider.
+
+**Polling em teste precisa de intervalo injetavel.** O `PedidosNovosProvider` aceita a prop `intervaloMs` para o teste disparar um ciclo sem esperar 30 s de relogio real. O padrao (30 s) vale em producao, porque ninguem passa a prop. O polling em segundo plano gera avisos de `act()` no vitest quando o ciclo cai fora de um `waitFor` - sao ruido, nao falha, e o intervalo um pouco maior reduz a frequencia.
+
+---
+
 ## Frontend (FASES 15 a 19)
+
+**"Valor vendido" no painel do produtor conta o que ja pode ser considerado venda, nao o que ja foi entregue.** A metrica olhava so para `status === 'ENTREGUE'`, mas o pagamento e feito na retirada: confirmar o recebimento e justamente o momento em que o dinheiro entra, e o item pode continuar PENDENTE (o produtor confirma sem ter passado por PROCESSANDO/ENVIADO). A regra correta e item ENTREGUE **ou** com `pagamento_status === 'PAGO'`, e item CANCELADO fica de fora mesmo com pagamento ja recebido - a metrica mede venda, nao fluxo de caixa. Cobrir os dois lados (incrementa ao confirmar; nao conta cancelado) evita que a proxima mudanca troque um pelo outro.
 
 **O `/health` fica FORA do versionamento, e o cliente `api.js` não o alcança.** A rota responde em `/health`, não em `/api/v1/health`, porque é infraestrutura (o health check do Render usa exatamente esse caminho). Como `VITE_API_URL` já inclui o prefixo `/api/v1`, chamar `/health` pelo cliente resultaria em `/api/v1/health` e 404. O status do rodapé (`services/saude.js`) deriva a raiz com `URL_BASE.replace(/\/api\/v\d+\/?$/, '')`. Antes de consumir qualquer endpoint de infraestrutura, conferir onde ele está montado em `app.js`.
 
@@ -320,11 +334,13 @@ Confirmado apos as correcoes: 10 rodadas seguidas de 55/55 (62/62 apos o rodape 
 
 **Escalação de privilégio já é barrada em duas camadas.** O enum `TIPOS_AUTOCADASTRO` rejeita `tipo: 'administrador'` com 400, e o service força o tipo a partir dessa lista caso o schema seja afrouxado. No PUT de perfil o campo `tipo` simplesmente não existe no schema, então o Zod o descarta — a requisição pode ser aceita, mas o papel no banco não muda. Há teste para os dois caminhos, e para `agricultor_id` no corpo da criação de produto (o dono vem sempre do token).
 
+**Dado privado que o dono precisa entregar vira snapshot do pedido, não consulta ao cadastro (FASE 25).** O produtor precisa do endereço e do telefone do comprador para entregar. O endereço já era snapshot (`endereco_entrega` JSONB), mas o telefone não existia em lugar nenhum — então entrou no snapshot, capturado de `usuario.telefone` no checkout. Duas razões para não fazer `JOIN usuarios` na leitura do agricultor: (1) é o contato combinado no momento da compra, e mudar o perfil depois não deve mudar o pedido; (2) a leitura do produtor continua sendo uma só consulta a `pedidos`, e não uma junção que precisaria repetir a regra de posse. O telefone é opcional no cadastro: o snapshot guarda `null` (a chave existe, o valor não), e a tela mostra "sem telefone cadastrado" em vez de sumir — o produtor precisa distinguir "o cliente não informou" de "a tela não mostrou". A exposição é limitada a quem tem item no pedido: a consulta do agricultor já filtra por `agricultor_id`, então um produtor de fora recebe 404 antes de ver qualquer contato.
+
 ---
 
 ## Testes completos (FASE 21)
 
-**`jest --coverage` derruba a suíte se o banco não estiver no ar.** O relatório de cobertura roda todo mundo; sem o PostgreSQL, as 16 suítes de integração falham com `ECONNREFUSED` e o resumo mostra "509 failed" — um número que parece problema de código e é só o container parado. Checar `docker compose ps` antes de interpretar qualquer falha em massa.
+**`jest --coverage` derruba a suíte se o banco não estiver no ar.** O relatório de cobertura roda todo mundo; sem o PostgreSQL, as 19 suítes de integração falham com `ECONNREFUSED` e o resumo mostra um número de falhas que parece problema de código e é só o container parado. Checar `docker compose ps` antes de interpretar qualquer falha em massa.
 
 **O daemon do Docker não sobe sozinho no ambiente.** `docker ps` responde `dial unix /var/run/docker.sock: no such file or directory`. A correção é `sudo dockerd > /tmp/docker.log 2>&1 &` e depois `sudo docker ...` (sem `sudo`, o socket recém-criado ainda dá permissão negada).
 

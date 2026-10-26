@@ -493,6 +493,55 @@ export class PedidoRepository extends RepositorioBase {
     return { itens, total };
   }
 
+  /*
+   * Conta os itens de pedido do agricultor que ainda nao foram tocados.
+   *
+   * "Novo" e o item em PENDENTE - o status com que ele nasce no checkout.
+   * Assim que o produtor marca PROCESSANDO, deixa de ser novidade. O
+   * numero cai sozinho conforme ele trabalha, sem precisar de um campo
+   * "lido" que ficaria errado se ele abrisse o painel em outro aparelho.
+   *
+   * O `WHERE pi.agricultor_id = $1` e a mesma defesa das outras consultas
+   * do painel: o produtor A nao conta nem ve item do produtor B. O indice
+   * `pedido_itens_agricultor_idx (agricultor_id, status)` cobre exatamente
+   * este filtro, entao a contagem nao varre a tabela.
+   */
+  async contarItensNovosDoAgricultor(agricultorId) {
+    return this.contar(
+      `SELECT count(*)::int AS total
+         FROM pedido_itens pi
+        WHERE pi.agricultor_id = $1 AND pi.status = 'PENDENTE'`,
+      [agricultorId],
+    );
+  }
+
+  /*
+   * Itens novos, com o minimo para o produtor decidir se abre o painel
+   * agora: produto, quantidade, valor e a cidade do comprador.
+   *
+   * A cidade sai do snapshot `endereco_entrega` pelo mesmo motivo do
+   * telefone: e o dado combinado na compra, e a leitura continua sendo
+   * uma consulta so. O contato completo fica na tela de pedidos - aqui e
+   * so o aviso, e mandar o endereco inteiro para um popup seria expor
+   * dado pessoal a um componente que nao precisa dele.
+   */
+  async listarItensNovosDoAgricultor(agricultorId, { limite = 10 } = {}) {
+    return this.executar(
+      `SELECT
+         pi.id, pi.pedido_id, pi.quantidade, pi.subtotal, pi.criado_em,
+         p.nome AS produto_nome, p.unidade,
+         pe.endereco_entrega->>'cidade' AS comprador_cidade,
+         pe.endereco_entrega->>'estado' AS comprador_estado
+       FROM pedido_itens pi
+       JOIN pedidos pe ON pe.id = pi.pedido_id
+       JOIN produtos p ON p.id = pi.produto_id
+      WHERE pi.agricultor_id = $1 AND pi.status = 'PENDENTE'
+      ORDER BY pi.criado_em DESC
+      LIMIT $2`,
+      [agricultorId, limite],
+    );
+  }
+
   /* Busca um item de pedido restrito ao agricultor dono. */
   async buscarItemDoAgricultor(agricultorId, itemId) {
     return this.buscarUm(

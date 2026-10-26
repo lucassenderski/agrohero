@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { useCarrinho } from '../contexts/CarrinhoContext.jsx';
+import { usePedidosNovos } from '../contexts/PedidosNovosContext.jsx';
 import Avatar from './Avatar.jsx';
 import './Header.css';
 
@@ -22,6 +23,7 @@ export default function Header() {
   const { usuario, autenticado, ehCliente, ehAgricultor, ehAdmin, sair, avatarUrl } =
     useAuth();
   const { quantidade } = useCarrinho();
+  const { total: totalPedidosNovos } = usePedidosNovos();
   const navegar = useNavigate();
   const [menuAberto, setMenuAberto] = useState(false);
 
@@ -39,7 +41,17 @@ export default function Header() {
     <header className="header">
       <div className="header__barra">
         <div className="container header__barra-interna">
-          <span>Agro Hero Toledo - PR · Conectando agricultores familiares e consumidores</span>
+          <span className="header__barra-marca">
+            <img
+              className="header__barra-icone"
+              src="/logo-padrao.svg"
+              alt=""
+              aria-hidden="true"
+              width="18"
+              height="18"
+            />
+            <span>Agro Hero Toledo - PR · Conectando agricultores familiares e consumidores</span>
+          </span>
           <span className="header__barra-links">
             <span>Cadastro seguro & LGPD</span>
             <Link to="/sobre">Sobre a iniciativa</Link>
@@ -95,8 +107,20 @@ export default function Header() {
               <Link to="/agricultor/produtos" className="header__link" onClick={fecharMenu}>
                 Meus produtos
               </Link>
-              <Link to="/agricultor/pedidos" className="header__link" onClick={fecharMenu}>
+              <Link
+                to="/agricultor/pedidos"
+                className="header__link header__link--pedidos"
+                onClick={fecharMenu}
+              >
                 Pedidos
+                {totalPedidosNovos > 0 && (
+                  <span
+                    className="header__contador"
+                    aria-label={`${totalPedidosNovos} pedidos novos`}
+                  >
+                    {totalPedidosNovos}
+                  </span>
+                )}
               </Link>
             </>
           )}

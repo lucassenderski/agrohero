@@ -1050,3 +1050,97 @@ describe('pedido multi-agricultor', () => {
     expect(await contar('pedidos')).toBe(0);
   });
 });
+
+/* ---------------------------------------------------------------- */
+/* Contato para a entrega                                            */
+/* ---------------------------------------------------------------- */
+
+/*
+ * O telefone de contato e o numero que o produtor usa para combinar a
+ * entrega. Ele pode ser informado no checkout e vai para o snapshot do
+ * pedido.
+ *
+ * A REGRA: o numero confirmado no checkout vence o do perfil; sem ele, o
+ * checkout usa o telefone do cadastro. E o que permite pedir o contato a
+ * quem nao tem, sem obrigar quem ja tem a digitar de novo.
+ */
+describe('telefone de contato no checkout', () => {
+  /* Le o snapshot gravado no ultimo pedido. */
+  async function telefoneDoSnapshot() {
+    const { rows } = await pool.query('SELECT endereco_entrega FROM pedidos');
+    return rows[0].endereco_entrega.telefone;
+  }
+
+  async function definirTelefoneDoPerfil(telefone) {
+    await pool.query('UPDATE usuarios SET telefone = $2 WHERE id = $1', [
+      idUsuarioCliente,
+      telefone,
+    ]);
+  }
+
+  test('o telefone informado no checkout vai para o snapshot', async () => {
+    await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
+
+    await finalizar({
+      endereco_id: idEndereco,
+      metodo_pagamento: 'PIX',
+      telefone_contato: '(19) 98888-7777',
+    }).expect(201);
+
+    /* Gravado apenas com digitos, mesma normalizacao do cadastro. */
+    expect(await telefoneDoSnapshot()).toBe('19988887777');
+  });
+
+  test('o telefone do checkout vence o do perfil', async () => {
+    await definirTelefoneDoPerfil('19999998888');
+    await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
+
+    await finalizar({
+      endereco_id: idEndereco,
+      metodo_pagamento: 'PIX',
+      telefone_contato: '11977776666',
+    }).expect(201);
+
+    expect(await telefoneDoSnapshot()).toBe('11977776666');
+  });
+
+  /*
+   * Sem telefone no corpo, o checkout cai no do perfil: quem ja tem
+   * contato cadastrado nao precisa digitar de novo.
+   */
+  test('sem telefone no corpo, usa o do perfil', async () => {
+    await definirTelefoneDoPerfil('19999998888');
+    await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
+
+    await finalizar({ endereco_id: idEndereco, metodo_pagamento: 'PIX' }).expect(201);
+
+    expect(await telefoneDoSnapshot()).toBe('19999998888');
+  });
+
+  /* Nem no corpo, nem no perfil: a chave existe e e nula. */
+  test('sem telefone no corpo e sem telefone no perfil, grava null', async () => {
+    await definirTelefoneDoPerfil(null);
+    await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
+
+    await finalizar({ endereco_id: idEndereco, metodo_pagamento: 'PIX' }).expect(201);
+
+    expect(await telefoneDoSnapshot()).toBeNull();
+  });
+
+  /*
+   * Telefone invalido barra ANTES de qualquer escrita: nao ha pedido
+   * pela metade por causa de um contato malformado.
+   */
+  test('telefone invalido devolve 400 e nao grava pedido', async () => {
+    await encherCarrinho([{ produto_id: idProduto, quantidade: 1 }]);
+
+    const resposta = await finalizar({
+      endereco_id: idEndereco,
+      metodo_pagamento: 'PIX',
+      telefone_contato: '123',
+    }).expect(400);
+
+    expect(resposta.body.erro.detalhes.some((d) => d.campo === 'telefone_contato')).toBe(true);
+    expect(await contar('pedidos')).toBe(0);
+  });
+});

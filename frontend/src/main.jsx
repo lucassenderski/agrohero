@@ -5,6 +5,7 @@ import App from './App.jsx';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import { CarrinhoProvider } from './contexts/CarrinhoContext.jsx';
 import { NotificacaoProvider } from './contexts/NotificacaoContext.jsx';
+import { PedidosNovosProvider } from './contexts/PedidosNovosContext.jsx';
 import './styles/global.css';
 
 /*
@@ -17,7 +18,8 @@ import './styles/global.css';
  * A ordem dos provedores importa: o CarrinhoProvider usa o useAuth
  * (para saber se ha consumidor logado), entao precisa estar DENTRO do
  * AuthProvider. Inverter a ordem quebra a aplicacao inteira com um
- * erro de contexto ausente.
+ * erro de contexto ausente. O PedidosNovosProvider tambem depende do
+ * useAuth, e pelo mesmo motivo fica dentro dele.
  */
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -25,7 +27,9 @@ createRoot(document.getElementById('root')).render(
       <NotificacaoProvider>
         <AuthProvider>
           <CarrinhoProvider>
-            <App />
+            <PedidosNovosProvider>
+              <App />
+            </PedidosNovosProvider>
           </CarrinhoProvider>
         </AuthProvider>
       </NotificacaoProvider>
